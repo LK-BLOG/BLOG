@@ -1,0 +1,2 @@
+# 本地开发用：复制本文件为 .dev.vars 并填写密码（.dev.vars 已被 git 忽略）
+ADMIN_PASSWORD=你的密码

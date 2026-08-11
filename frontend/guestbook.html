@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>留言板 - 小戡的博客</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-brand"><a href="index.html"><span class="brand-icon">戡</span>小戡的博客</a></div>
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
+    <label for="nav-toggle" class="nav-toggle-label" aria-label="菜单"><span></span><span></span><span></span></label>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="articles.html">文章</a>
+      <a href="guestbook.html" class="active">留言板</a>
+      <a href="about.html">关于</a>
+      <a href="friends.html">友链</a>
+    </div>
+  </nav>
+  <main>
+    <section class="section">
+      <fieldset>
+        <legend>留言板</legend>
+        <p class="sec-intro">来都来了，说两句再走。文明冲浪，谢绝广告。</p>
+        <div class="win mb16">
+          <div class="win-title"><span class="win-label">写留言</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+          <div class="win-body">
+            <div id="msg-alert"></div>
+            <form id="msg-form">
+              <div class="form-row">
+                <label for="nickname">昵称</label>
+                <input class="field" type="text" id="nickname" maxlength="30" placeholder="你的名字（必填）" required>
+              </div>
+              <div class="form-row">
+                <label for="content">内容</label>
+                <textarea class="field" id="content" maxlength="500" placeholder="想说的话…（必填，500 字以内）" required></textarea>
+              </div>
+              <button type="submit" class="btn primary">提交留言</button>
+            </form>
+          </div>
+        </div>
+        <div id="msg-list" class="win flat"><p class="muted px12">加载中…</p></div>
+      </fieldset>
+    </section>
+  </main>
+  <footer class="footer">
+    <marquee class="ticker" scrollamount="6">🎉 欢迎来到小戡的博客！本站 90 年代风格，Vibe Coding 产物，后端跑在 Cloudflare 上。随便逛，留言板记得踩一脚！</marquee>
+    <div class="footer-row">
+      <span>© 2026 小戡的博客 · Vibe Coding 产物 · GitHub + Cloudflare</span>
+      <span><a class="admin-link" href="admin.html">管理入口</a></span>
+    </div>
+  </footer>
+  <script src="js/config.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/guestbook.js"></script>
+</body>
+</html>

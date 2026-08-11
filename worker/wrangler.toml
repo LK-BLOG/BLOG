@@ -1,0 +1,26 @@
+# ============================================================
+# 小戡的博客 API — Cloudflare Python Worker 配置
+# ------------------------------------------------------------
+# 部署前必做：
+#   1. npx wrangler d1 create xiaokan-blog   （创建 D1 数据库）
+#   2. 把返回的 database_id 填到下面
+#   3. npx wrangler d1 migrations apply xiaokan-blog --remote
+#   4. npx wrangler deploy
+# ============================================================
+name = "xiaokan-api"
+main = "src/worker.py"
+compatibility_date = "2025-11-02"
+compatibility_flags = ["python_workers", "python_dedicated_snapshot"]
+
+# 注意：admin 密码不要写在这里！
+# 本地开发：复制 .dev.vars.example 为 .dev.vars 并填写密码（.dev.vars 已被 git 忽略）
+# 线上部署：npx wrangler secret put ADMIN_PASSWORD
+
+[[d1_databases]]
+binding = "DB"
+database_name = "xiaokan-blog"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[observability]
+enabled = true

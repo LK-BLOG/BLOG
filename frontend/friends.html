@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>友链 - 小戡的博客</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-brand"><a href="index.html"><span class="brand-icon">戡</span>小戡的博客</a></div>
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
+    <label for="nav-toggle" class="nav-toggle-label" aria-label="菜单"><span></span><span></span><span></span></label>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="articles.html">文章</a>
+      <a href="guestbook.html">留言板</a>
+      <a href="about.html">关于</a>
+      <a href="friends.html" class="active">友链</a>
+    </div>
+  </nav>
+  <main>
+    <section class="section">
+      <fieldset>
+        <legend>友情链接</legend>
+        <p class="sec-intro">交换友链请在留言板吱一声，或者去 GitHub 提 issue。</p>
+        <div id="friend-list" class="grid"></div>
+      </fieldset>
+    </section>
+  </main>
+  <footer class="footer">
+    <marquee class="ticker" scrollamount="6">🎉 欢迎来到小戡的博客！本站 90 年代风格，Vibe Coding 产物，后端跑在 Cloudflare 上。随便逛，留言板记得踩一脚！</marquee>
+    <div class="footer-row">
+      <span>© 2026 小戡的博客 · Vibe Coding 产物 · GitHub + Cloudflare</span>
+      <span><a class="admin-link" href="admin.html">管理入口</a></span>
+    </div>
+  </footer>
+  <script src="js/config.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/friends.js"></script>
+</body>
+</html>

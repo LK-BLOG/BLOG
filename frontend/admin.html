@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理后台 - 小戡的博客</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-brand"><a href="index.html"><span class="brand-icon">戡</span>小戡的博客 · 管理后台</a></div>
+    <div class="nav-links" id="admin-nav-extra"></div>
+  </nav>
+
+  <main>
+    <section class="section" style="max-width:860px">
+      <!-- 登录窗 -->
+      <div id="login-view" class="win" style="max-width:400px;margin:40px auto">
+        <div class="win-title"><span class="win-label">🔒 管理员登录</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+        <div class="win-body">
+          <div id="login-alert"></div>
+          <form id="login-form">
+            <div class="form-row">
+              <label for="password">密码</label>
+              <input class="field" type="password" id="password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn primary">登 录</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- 管理面板 -->
+      <div id="panel-view" class="hidden">
+        <div class="mb16" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn primary" data-tab="articles">文章管理</button>
+          <button class="btn" data-tab="messages">留言管理</button>
+          <button class="btn" data-tab="editor" id="new-article-btn">＋ 写新文章</button>
+          <button class="btn danger" id="logout-btn">退出登录</button>
+        </div>
+
+        <div id="tab-articles" class="tab-pane">
+          <div class="win flat mb16" id="articles-manage"><p class="muted px12">加载中…</p></div>
+        </div>
+
+        <div id="tab-messages" class="tab-pane hidden">
+          <div class="win flat mb16" id="messages-manage"><p class="muted px12">加载中…</p></div>
+        </div>
+
+        <div id="tab-editor" class="tab-pane hidden">
+          <div class="win">
+            <div class="win-title"><span class="win-label" id="editor-title">写新文章</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+            <div class="win-body">
+              <div id="editor-alert"></div>
+              <form id="editor-form">
+                <div class="form-row">
+                  <label for="e-title">标题 *</label>
+                  <input class="field" type="text" id="e-title" maxlength="200" required>
+                </div>
+                <div class="form-row">
+                  <label for="e-slug">链接标识（slug）* <span class="hint">只能含字母/数字/中划线/下划线，如 my-first-post；留空自动生成</span></label>
+                  <input class="field" type="text" id="e-slug" maxlength="120" placeholder="留空自动生成">
+                </div>
+                <div class="form-row">
+                  <label for="e-content">正文（Markdown）*</label>
+                  <textarea class="field" id="e-content" style="min-height:260px" required></textarea>
+                </div>
+                <div class="mb16">
+                  <button type="button" class="btn" id="preview-toggle">预览 Markdown</button>
+                </div>
+                <div id="e-preview" class="hidden markdown-body win flat mb16"></div>
+                <div style="display:flex;gap:8px">
+                  <button type="submit" class="btn primary">保 存</button>
+                  <button type="button" class="btn" id="editor-cancel">取 消</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-row">
+      <span>管理后台 · <a href="index.html">← 返回首页</a></span>
+      <span>Vibe Coding 产物 · <a class="admin-link" href="index.html">小戡的博客</a></span>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/common.js"></script>
+  <script src="lib/marked.min.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+.wrangler/
+.venv/
+__pycache__/
+node_modules/
+.DS_Store
+.venv-workers/
+
+.dev.vars
+pylock.toml
+python_modules/

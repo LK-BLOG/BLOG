@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>关于 - 小戡的博客</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-brand"><a href="index.html"><span class="brand-icon">戡</span>小戡的博客</a></div>
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
+    <label for="nav-toggle" class="nav-toggle-label" aria-label="菜单"><span></span><span></span><span></span></label>
+    <div class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="articles.html">文章</a>
+      <a href="guestbook.html">留言板</a>
+      <a href="about.html" class="active">关于</a>
+      <a href="friends.html">友链</a>
+    </div>
+  </nav>
+  <main>
+    <section class="section">
+      <fieldset>
+        <legend>关于我</legend>
+        <div class="win mb16">
+          <div class="win-title"><span class="win-label">自我介绍</span><span class="win-dots"><span class="dot"></span></span></div>
+          <div class="win-body">
+            <p>嗨，我是 <strong>小戡</strong>（骆戡）。</p>
+            <p class="mt8">平时喜欢折腾各种东西：会写点 HTML、玩点 Python 3，研究部署，偶尔整点活。</p>
+            <p class="mt8">这个站是我 90 年代风格的个人小窝，Vibe Coding 产物，没用框架，主打一个复古又硬核。</p>
+          </div>
+        </div>
+        <div class="win">
+          <div class="win-title"><span class="win-label">本站信息</span><span class="win-dots"><span class="dot"></span></span></div>
+          <div class="win-body">
+            <table>
+              <tr><th>前端</th><td>HTML / CSS / JS（Win98 复古风，无框架、无 Tailwind，Vibe Coding 产物）</td></tr>
+              <tr><th>后端</th><td>Python Worker（FastAPI）跑在 Cloudflare Workers</td></tr>
+              <tr><th>数据库</th><td>Cloudflare D1（SQLite）</td></tr>
+              <tr><th>托管</th><td>GitHub 存代码 + Cloudflare Pages</td></tr>
+              <tr><th>生成方式</th><td>本站是 Vibe Coding 产物（AI 辅助开发）</td></tr>
+              <tr><th>出生日期</th><td>2026-08-11</td></tr>
+            </table>
+          </div>
+        </div>
+      </fieldset>
+    </section>
+  </main>
+  <footer class="footer">
+    <marquee class="ticker" scrollamount="6">🎉 欢迎来到小戡的博客！本站 90 年代风格，Vibe Coding 产物，后端跑在 Cloudflare 上。随便逛，留言板记得踩一脚！</marquee>
+    <div class="footer-row">
+      <span>© 2026 小戡的博客 · Vibe Coding 产物 · GitHub + Cloudflare</span>
+      <span><a class="admin-link" href="admin.html">管理入口</a></span>
+    </div>
+  </footer>
+  <script src="js/config.js"></script>
+  <script src="js/common.js"></script>
+</body>
+</html>
