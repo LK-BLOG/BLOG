@@ -1,7 +1,7 @@
 [project]
 name = "xiaokan-api"
 version = "0.1.0"
-description = "小戡的博客 API（FastAPI on Cloudflare Workers）"
+description = "XiaoKan Blog API (FastAPI on Cloudflare Workers)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
