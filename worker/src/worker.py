@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from workers import WorkerEntrypoint
 
 app = FastAPI()
@@ -68,6 +68,14 @@ class ArticleIn(BaseModel):
 class MessageIn(BaseModel):
     nickname: str = Field(min_length=1, max_length=30)
     content: str = Field(min_length=1, max_length=500)
+
+    @field_validator("nickname", "content")
+    @classmethod
+    def strip_and_check(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("不能为空")
+        return v
 
 
 # ---------- 健康检查 ----------
@@ -155,7 +163,7 @@ async def list_messages(request: Request):
 
 @app.post("/api/messages")
 async def create_message(body: MessageIn, request: Request):
-    ip = request.client.host or "unknown"
+    ip = (request.client.host if request.client else None) or request.headers.get("cf-connecting-ip") or "unknown"
     now_ts = int(time.time())
     db = _db(request)
 
