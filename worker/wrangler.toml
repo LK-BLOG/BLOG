@@ -19,7 +19,7 @@ compatibility_flags = ["python_workers", "python_dedicated_snapshot"]
 [[d1_databases]]
 binding = "DB"
 database_name = "xiaokan-blog"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "27c48060-9fd3-4440-b098-b6c6026eebb3"
 migrations_dir = "migrations"
 
 [observability]
