@@ -420,3 +420,34 @@ th { background: var(--face); }
   .footer-row { justify-content: center; text-align: center; }
   .desktop { padding: 30px 10px 26px; }
 }
+/* ===== AI 机器人聊天窗 ===== */
+.chat-fab {
+  position: fixed; right: 16px; bottom: 16px; z-index: 300;
+  background: var(--titlebar); color: #fff; border: 2px solid;
+  border-color: var(--hl) var(--dark) var(--dark) var(--hl);
+  padding: 8px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
+  box-shadow: 2px 2px 0 rgba(0,0,0,.35);
+}
+.chat-fab:hover { background: #00a0a0; }
+.chat-window {
+  position: fixed; right: 16px; bottom: 64px; z-index: 300;
+  width: 330px; max-width: calc(100vw - 32px);
+  display: none;
+}
+.chat-window.open { display: block; }
+.chat-close {
+  background: var(--face); border: 1px solid; border-color: var(--hl) var(--dark) var(--dark) var(--hl);
+  width: 20px; height: 20px; cursor: pointer; color: var(--text); font-size: 11px; line-height: 1;
+}
+.chat-body { height: 300px; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.chat-msg { max-width: 85%; }
+.chat-msg.me { align-self: flex-end; }
+.chat-nick { font-size: 11px; color: var(--dim); margin-bottom: 2px; }
+.chat-text {
+  background: #fff; border: 2px solid; border-color: var(--hl) var(--shadow) var(--shadow) var(--hl);
+  padding: 6px 8px; font-size: 13px; white-space: pre-wrap; word-break: break-word;
+}
+.chat-msg.me .chat-text { background: #d8f0f0; }
+.chat-typing { padding: 4px 10px; font-size: 12px; color: var(--dim); border-top: 1px solid var(--shadow); }
+.chat-input-row { display: flex; gap: 6px; padding: 8px; background: var(--face); border-top: 2px solid var(--hl); }
+.chat-input-row .field { flex: 1; }

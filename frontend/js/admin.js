@@ -93,6 +93,7 @@
     loginView.classList.add("hidden");
     panelView.classList.remove("hidden");
     bindPanelEvents();
+    bindBotForm();
     switchTab("articles");
     loadArticles();
     loadMessages();
@@ -126,12 +127,13 @@
     document.querySelectorAll("[data-tab]").forEach(function (b) {
       b.classList.toggle("primary", b.dataset.tab === tab);
     });
-    ["articles", "messages", "comments", "editor"].forEach(function (t) {
+    ["articles", "messages", "comments", "bot", "editor"].forEach(function (t) {
       $("tab-" + t).classList.toggle("hidden", t !== tab);
     });
     if (tab === "articles") loadArticles();
     if (tab === "messages") loadMessages();
     if (tab === "comments") loadComments();
+    if (tab === "bot") loadBotSettings();
   }
 
   /* ---------- 文章管理 ---------- */
@@ -243,6 +245,33 @@
       });
     }).catch(function (err) {
       box.innerHTML = '<div class="alert error">加载失败：' + Blog.escapeHtml(err.message) + "</div>";
+    });
+  }
+
+  /* ---------- 机器人设置 ---------- */
+  function loadBotSettings() {
+    var box = $("bot-limit");
+    Blog.api("/api/settings").then(function (data) {
+      box.value = data.chat_daily_limit;
+    }).catch(function (err) {
+      $("bot-alert").innerHTML = '<div class="alert error">加载设置失败：' + Blog.escapeHtml(err.message) + "</div>";
+    });
+  }
+
+  function bindBotForm() {
+    var form = $("bot-form");
+    if (!form) return;
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var val = parseInt($("bot-limit").value, 10);
+      if (!val || val < 1) { $("bot-alert").innerHTML = '<div class="alert error">请输入大于 0 的数字</div>'; return; }
+      Blog.api("/api/settings", { method: "PUT", body: { chat_daily_limit: val } })
+        .then(function () {
+          $("bot-alert").innerHTML = '<div class="alert ok">保存成功！每日上限 = ' + val + " 轮</div>";
+        })
+        .catch(function (err) {
+          $("bot-alert").innerHTML = '<div class="alert error">保存失败：' + Blog.escapeHtml(err.message) + "</div>";
+        });
     });
   }
 

@@ -186,5 +186,19 @@
   <script src="js/config.js"></script>
   <script src="js/common.js"></script>
   <script src="js/index.js"></script>
+  <!-- AI 机器人 -->
+  <button class="chat-fab" id="chat-fab" title="和机器人聊聊">🤖 找机器人</button>
+  <div class="chat-window win" id="chat-window">
+    <div class="win-title"><span class="win-label">🤖 机器人</span><button class="chat-close" id="chat-close" title="关闭">✕</button></div>
+    <div class="chat-body" id="chat-msgs">
+      <div class="chat-msg bot"><div class="chat-nick">🤖 机器人</div><div class="chat-text">你好呀，我是小戡的博客机器人，随便聊！</div></div>
+    </div>
+    <div class="chat-typing" id="chat-typing" style="display:none">机器人正在思考…</div>
+    <div class="chat-input-row">
+      <input class="field" id="chat-input" type="text" maxlength="500" placeholder="说点什么…">
+      <button class="btn primary" id="chat-send">发送</button>
+    </div>
+  </div>
+  <script src="js/chat.js"></script>
 </body>
 </html>
