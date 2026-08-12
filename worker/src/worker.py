@@ -32,6 +32,8 @@ USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{2,20}$")
 PASSWORD_MIN = 6
 PASSWORD_MAX = 72
 PBKDF2_ITER = 100000
+LOGIN_MAX_FAILS = 5
+LOGIN_LOCK_SECONDS = 60
 RATE_LIMIT_SECONDS = 60
 MAX_MESSAGES = 200
 
@@ -157,22 +159,65 @@ async def health():
 
 # ---------- 登录 ----------
 
+def _client_ip(request: Request) -> str:
+    return (request.client.host if request.client else None) or request.headers.get("cf-connecting-ip") or "unknown"
+
+
+async def _login_remaining(db, ip: str, username: str) -> int:
+    now = int(time.time())
+    for key in ("ip:" + ip, "user:" + username):
+        row = await db.prepare("SELECT locked_until FROM login_rate_limits WHERE key = ?").bind(key).first()
+        if row and int(row["locked_until"]) > now:
+            return int(row["locked_until"]) - now
+    return 0
+
+
+async def _record_login_fail(db, ip: str, username: str) -> None:
+    now = int(time.time())
+    for key in ("ip:" + ip, "user:" + username):
+        row = await db.prepare("SELECT fails FROM login_rate_limits WHERE key = ?").bind(key).first()
+        fails = (int(row["fails"]) + 1) if row else 1
+        locked_until = now + LOGIN_LOCK_SECONDS if fails >= LOGIN_MAX_FAILS else 0
+        await db.prepare(
+            "INSERT INTO login_rate_limits (key, fails, locked_until) VALUES (?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET fails = excluded.fails, locked_until = excluded.locked_until"
+        ).bind(key, fails, locked_until).run()
+
+
+async def _clear_login_fails(db, ip: str, username: str) -> None:
+    for key in ("ip:" + ip, "user:" + username):
+        await db.prepare("DELETE FROM login_rate_limits WHERE key = ?").bind(key).run()
+
+
 @app.post("/api/login")
 async def login(body: LoginIn, request: Request):
     env = request.scope["env"]
     username = body.username.strip()
+    db = _db(request)
+    ip = _client_ip(request)
+
+    remaining = await _login_remaining(db, ip, username)
+    if remaining:
+        raise HTTPException(status_code=429, detail="尝试次数过多，请 %d 秒后再试" % remaining)
+
+    ok = False
     if username == "admin":
-        if not hmac.compare_digest(body.password, getattr(env, "ADMIN_PASSWORD", "")):
-            raise HTTPException(status_code=401, detail="用户名或密码错误")
+        ok = hmac.compare_digest(body.password, getattr(env, "ADMIN_PASSWORD", ""))
+    elif USERNAME_RE.match(username):
+        row = await db.prepare(
+            "SELECT password_hash, role FROM users WHERE username = ?"
+        ).bind(username).first()
+        ok = bool(row) and _verify_password(body.password, row["password_hash"])
+        if ok:
+            await _clear_login_fails(db, ip, username)
+            return {"token": _make_token(username, row["role"], env), "username": username, "role": row["role"]}
+
+    if username == "admin" and ok:
+        await _clear_login_fails(db, ip, username)
         return {"token": _make_token("admin", "admin", env), "username": "admin", "role": "admin"}
-    if not USERNAME_RE.match(username):
-        raise HTTPException(status_code=401, detail="用户名或密码错误")
-    row = await _db(request).prepare(
-        "SELECT password_hash, role FROM users WHERE username = ?"
-    ).bind(username).first()
-    if not row or not _verify_password(body.password, row["password_hash"]):
-        raise HTTPException(status_code=401, detail="用户名或密码错误")
-    return {"token": _make_token(username, row["role"], env), "username": username, "role": row["role"]}
+
+    await _record_login_fail(db, ip, username)
+    raise HTTPException(status_code=401, detail="用户名或密码错误")
 
 
 @app.post("/api/register")
