@@ -53,6 +53,19 @@
       }
     }
 
+    var adminBtn = $("chat-admin");
+    if (!adminBtn && win) {
+      adminBtn = document.createElement("button");
+      adminBtn.id = "chat-admin";
+      adminBtn.textContent = "管理";
+      adminBtn.style.cssText = "font-size:11px;margin-left:6px;";
+      adminBtn.addEventListener("click", function () { location.href = "admin.html"; });
+      var title0 = win.querySelector(".win-title");
+      var closeBtn0 = $("chat-close");
+      if (title0) title0.insertBefore(adminBtn, closeBtn0 || null);
+    }
+    if (adminBtn) adminBtn.style.display = (authed && Blog.getRole() === "admin") ? "" : "none";
+
     var logoutBtn = $("chat-logout");
     if (!logoutBtn && win) {
       logoutBtn = document.createElement("button");

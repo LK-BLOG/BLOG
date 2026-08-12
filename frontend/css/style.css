@@ -381,8 +381,8 @@ th { background: var(--face); }
   font-size: 12px;
   color: var(--dim);
 }
-.footer-row .admin-link { color: var(--dim); }
-.footer-row .admin-link:hover { color: var(--link); }
+.footer-row .admin-link { color: var(--link); text-decoration: underline; }
+.footer-row .admin-link:hover { color: var(--visited); }
 
 /* ===== 工具类 ===== */
 .muted { color: var(--dim); font-size: 12px; }
