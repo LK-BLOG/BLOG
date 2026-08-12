@@ -518,8 +518,8 @@ async def chat(body: ChatIn, request: Request):
     now_ts = int(time.time())
     db = _db(request)
 
-    # 管理员无限使用；普通用户按账号限流（60 秒最多 10 次 + 每日上限）
-    if user_role != "admin":
+    # 管理员/协管无限使用；普通用户按账号限流（60 秒最多 10 次 + 每日上限）
+    if user_role not in ("admin", "moderator"):
         user = await db.prepare("SELECT id, banned, banned_until FROM users WHERE username = ?").bind(username).first()
         if not user:
             raise HTTPException(status_code=401, detail="账号不存在，请重新登录")
@@ -660,7 +660,7 @@ async def chat(body: ChatIn, request: Request):
         if not reply:
             errors.append(p["name"] + "：空回复")
             continue
-        if user_role != "admin":
+        if user_role not in ("admin", "moderator"):
             await db.prepare(
                 "INSERT INTO user_chat_daily_usage (user_id, date, count) VALUES (?, ?, 1) "
                 "ON CONFLICT(user_id) DO UPDATE SET count = CASE WHEN user_chat_daily_usage.date = excluded.date "
