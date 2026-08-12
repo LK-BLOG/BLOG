@@ -38,9 +38,10 @@
     if (!userSpan && win) {
       userSpan = document.createElement("span");
       userSpan.id = "chat-user";
-      userSpan.style.cssText = "font-size:12px;margin-left:8px;color:#c0c0c0;";
+      userSpan.style.cssText = "font-size:12px;margin-left:auto;color:#c0c0c0;white-space:nowrap;";
       var title = win.querySelector(".win-title");
-      if (title) title.insertBefore(userSpan, title.querySelector(".win-dots"));
+      var closeBtn = $("chat-close");
+      if (title) title.insertBefore(userSpan, closeBtn || null);
     }
     if (userSpan) {
       if (authed) {
@@ -63,7 +64,8 @@
         renderAuth();
       });
       var title2 = win.querySelector(".win-title");
-      if (title2) title2.insertBefore(logoutBtn, title2.querySelector(".win-dots"));
+      var closeBtn2 = $("chat-close");
+      if (title2) title2.insertBefore(logoutBtn, closeBtn2 || null);
     }
     if (logoutBtn) logoutBtn.style.display = authed ? "" : "none";
 
