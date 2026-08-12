@@ -552,11 +552,11 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
         if user_cmt_id:
             await db.prepare(
                 "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, NULL, ?, 1)"
-            ).bind(slug, "🤖 小戓的机器人", reply, _now_iso(), user_cmt_id).run()
+            ).bind(slug, "🤖 小戡的机器人", reply, _now_iso(), user_cmt_id).run()
         else:
             await db.prepare(
                 "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, NULL, ?, 1)"
-            ).bind(slug, "🤖 小戓的机器人", reply, _now_iso(), parent_id).run()
+            ).bind(slug, "🤖 小戡的机器人", reply, _now_iso(), parent_id).run()
         return {"ok": True, "bot_reply": reply}
 
     await db.prepare(
