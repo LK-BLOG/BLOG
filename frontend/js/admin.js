@@ -142,13 +142,14 @@
     document.querySelectorAll("[data-tab]").forEach(function (b) {
       b.classList.toggle("primary", b.dataset.tab === tab);
     });
-    ["articles", "messages", "comments", "users", "bot", "editor"].forEach(function (t) {
+    ["articles", "messages", "comments", "users", "reports", "bot", "editor"].forEach(function (t) {
       $("tab-" + t).classList.toggle("hidden", t !== tab);
     });
     if (tab === "articles") loadArticles();
     if (tab === "messages") loadMessages();
     if (tab === "comments") loadComments();
     if (tab === "users") loadUsers();
+    if (tab === "reports") loadReports();
     if (tab === "bot") loadBotSettings();
   }
 
@@ -319,6 +320,32 @@
             .catch(function (err) { alert("删除失败：" + err.message); });
         });
       });
+    }).catch(function (err) {
+      box.innerHTML = '<div class="alert error">加载失败：' + Blog.escapeHtml(err.message) + "</div>";
+    });
+  }
+
+  /* ---------- 举报记录 ---------- */
+  function loadReports() {
+    var box = $("reports-manage");
+    box.innerHTML = '<p class="muted px12">加载中…</p>';
+    Blog.api("/api/reports").then(function (data) {
+      var list = (data && data.reports) || [];
+      if (!list.length) {
+        box.innerHTML = '<p class="muted px12">还没有举报记录。</p>';
+        return;
+      }
+      var html = '<table><tr><th>类型</th><th>被举报内容</th><th>原因</th><th>举报人</th><th>状态</th><th style="width:130px">时间</th></tr>';
+      list.forEach(function (r) {
+        var st = r.status === "handled" ? "已处理" : "待处理";
+        html += "<tr><td>" + (r.target_type === "comment" ? "评论" : "留言") + "</td>" +
+          "<td>" + Blog.escapeHtml(r.content || "") + "</td>" +
+          "<td>" + Blog.escapeHtml(r.reason || "") + "</td>" +
+          "<td>" + Blog.escapeHtml(r.reporter || "") + "</td><td>" + st + "</td>" +
+          "<td class='nowrap'>" + Blog.escapeHtml(Blog.fmtDate(r.created_at)) + "</td></tr>";
+      });
+      html += "</table>";
+      box.innerHTML = html;
     }).catch(function (err) {
       box.innerHTML = '<div class="alert error">加载失败：' + Blog.escapeHtml(err.message) + "</div>";
     });

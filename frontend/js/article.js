@@ -48,6 +48,8 @@
       }
       if (m.is_mine) {
         ops += "<button class='btn danger' data-del='" + m.id + "'>删除</button>";
+      } else if (!m.is_bot) {
+        ops += "<button class='btn' data-report='" + m.id + "'>举报</button>";
       }
       html += '<div class="msg" style="' + style + '">' +
         '<div class="msg-head"><span class="msg-nick" ' + nickCls + ">" + esc(m.nickname) + "</span><span>" + esc(Blog.fmtDate(m.created_at)) + "</span></div>" +
@@ -71,6 +73,26 @@
         Blog.api("/api/comments/" + encodeURIComponent(b.dataset.del), { method: "DELETE" })
           .then(function () { loadComments(); })
           .catch(function (err) { showCmtAlert("删除失败：" + err.message); });
+      });
+    });
+    cmtList.querySelectorAll("[data-report]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (!confirm("举报这条评论？机器人会自动审核。")) return;
+        var btn = b;
+        btn.disabled = true;
+        Blog.api("/api/reports", { method: "POST", body: { target_type: "comment", target_id: parseInt(b.dataset.report, 10), reason: "内容违规" } })
+          .then(function (d) {
+            if (d.action === "deleted_banned") showCmtAlert("已处理：违规，已删除并封禁作者", "ok");
+            else if (d.action === "deleted") showCmtAlert("已处理：违规，已删除", "ok");
+            else showCmtAlert("审核结果：未发现违规", "ok");
+            loadComments();
+          })
+          .catch(function (err) {
+            if (err.status === 409) showCmtAlert("你已经举报过这条评论");
+            else if (err.status === 429) showCmtAlert("举报太频繁，请 60 秒后再试");
+            else showCmtAlert("举报失败：" + err.message);
+          })
+          .finally(function () { btn.disabled = false; });
       });
     });
   }

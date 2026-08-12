@@ -162,6 +162,12 @@ class UserBanIn(BaseModel):
 class UserRoleIn(BaseModel):
     role: str = Field(pattern="^(admin|moderator|user)$")
 
+
+class ReportIn(BaseModel):
+    target_type: str = Field(pattern="^(comment|message)$")
+    target_id: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=200)
+
 class MessageIn(BaseModel):
     nickname: str | None = Field(default=None, max_length=30)
     content: str = Field(min_length=1, max_length=500)
@@ -536,12 +542,18 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
             article["title"], str(article["content_md"])[:2000]
         )
         reply = await _call_bot(env, prompt, [{"role": "user", "content": content}])
-        await db.prepare(
+        r1 = await db.prepare(
             "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, ?, ?, 0)"
         ).bind(slug, nickname, content, _now_iso(), user_id, parent_id).run()
-        await db.prepare(
-            "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, NULL, ?, 1)"
-        ).bind(slug, "🤖 小戡的机器人", reply, _now_iso(), parent_id).run()
+        user_cmt_id = int(r1.meta.last_row_id) if r1 and r1.meta and r1.meta.last_row_id else None
+        if user_cmt_id:
+            await db.prepare(
+                "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, NULL, ?, 1)"
+            ).bind(slug, "🤖 小戓的机器人", reply, _now_iso(), user_cmt_id).run()
+        else:
+            await db.prepare(
+                "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, NULL, ?, 1)"
+            ).bind(slug, "🤖 小戓的机器人", reply, _now_iso(), parent_id).run()
         return {"ok": True, "bot_reply": reply}
 
     await db.prepare(
@@ -933,6 +945,85 @@ async def delete_user(username: str, request: Request):
     await db.prepare("DELETE FROM user_chat_rate_limits WHERE user_id = ?").bind(uid).run()
     await db.prepare("DELETE FROM user_chat_daily_usage WHERE user_id = ?").bind(uid).run()
     return {"ok": True, "username": username}
+# ---------- 举报（bot 自动审核） ----------
+
+@app.post("/api/reports")
+async def create_report(body: ReportIn, request: Request):
+    username, user_role = _require_auth(request)
+    db = _db(request)
+    if body.target_type == "comment":
+        target = await db.prepare("SELECT id, nickname, content, user_id FROM comments WHERE id = ?").bind(body.target_id).first()
+    else:
+        target = await db.prepare("SELECT id, nickname, content, user_id FROM messages WHERE id = ?").bind(body.target_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="举报的目标不存在")
+
+    dup = await db.prepare(
+        "SELECT id FROM reports WHERE target_type = ? AND target_id = ? AND reporter = ?"
+    ).bind(body.target_type, body.target_id, username).first()
+    if dup:
+        raise HTTPException(status_code=409, detail="你已经举报过这条内容")
+
+    recent = await db.prepare(
+        "SELECT created_at FROM reports WHERE reporter = ? ORDER BY id DESC LIMIT 1"
+    ).bind(username).first()
+    if recent:
+        try:
+            from datetime import datetime as _dt
+            t = _dt.strptime(recent["created_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+            if int(time.time()) - int(t) < 60:
+                raise HTTPException(status_code=429, detail="举报太频繁，请 60 秒后再试")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    r = await db.prepare(
+        "INSERT INTO reports (target_type, target_id, reason, reporter, status, content, created_at) VALUES (?, ?, ?, ?, 'open', ?, ?)"
+    ).bind(body.target_type, body.target_id, body.reason.strip(), username, target["content"][:500], _now_iso()).run()
+    report_id = int(r.meta.last_row_id) if r and r.meta and r.meta.last_row_id else None
+
+    # bot 审核
+    env = request.scope["env"]
+    label = "评论" if body.target_type == "comment" else "留言"
+    judge_prompt = (
+        "你是本站内容审核员。判断下面这条" + label +
+        "是否属于违规内容（色情、暴力、诈骗、仇恨、违法等）。只回复“违规”或“不违规”。"
+    )
+    try:
+        verdict = await _call_bot(env, judge_prompt, [{"role": "user", "content": target["content"]}])
+    except Exception:
+        verdict = ""
+    violated = ("违规" in verdict) and ("不违规" not in verdict)
+    action = "ignored"
+    now_ts = int(time.time())
+    if violated:
+        if body.target_type == "comment":
+            await db.prepare("DELETE FROM comments WHERE id = ? OR parent_id = ?").bind(body.target_id, body.target_id).run()
+        else:
+            await db.prepare("DELETE FROM messages WHERE id = ?").bind(body.target_id).run()
+        action = "deleted"
+        if target.get("user_id"):
+            author = await db.prepare("SELECT username, role FROM users WHERE id = ?").bind(target["user_id"]).first()
+            if author and author["role"] == "user":
+                await db.prepare(
+                    "UPDATE users SET banned = 1, banned_until = ? WHERE id = ?"
+                ).bind(now_ts + ROBOT_BAN_DAYS * 86400, target["user_id"]).run()
+                action = "deleted_banned"
+    if report_id:
+        await db.prepare("UPDATE reports SET status = 'handled' WHERE id = ?").bind(report_id).run()
+    return {"ok": True, "action": action, "verdict": verdict[:100]}
+
+
+@app.get("/api/reports")
+async def list_reports(request: Request):
+    _check_moderator(request)
+    res = await _db(request).prepare(
+        "SELECT id, target_type, target_id, reason, reporter, status, content, created_at FROM reports ORDER BY id DESC LIMIT 100"
+    ).all()
+    return {"reports": res.results}
+
+
 # ---------- Worker 入口 ----------
 
 class Default(WorkerEntrypoint):
