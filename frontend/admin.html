@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>管理后台 - 小戡的博客</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <meta name="description" content="????? - ?????">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="lib/quill.snow.css">
   <style>
@@ -110,6 +111,18 @@
                 <div class="form-row">
                   <label for="e-slug">链接标识（slug）* <span class="hint">只能含字母/数字/中划线/下划线，如 my-first-post；留空自动生成</span></label>
                   <input class="field" type="text" id="e-slug" maxlength="120" placeholder="留空自动生成">
+                </div>
+                <div class="form-row">
+                  <label for="e-tags">标签 <span class="hint">逗号分隔，如 Python,整活</span></label>
+                  <input class="field" type="text" id="e-tags" maxlength="200" placeholder="Python, 整活">
+                </div>
+                <div class="form-row">
+                  <label>图片</label>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button type="button" class="btn" id="e-img-url">插入图片链接</button>
+                    <button type="button" class="btn" id="e-popup">插入互动按钮</button>
+                    <span class="hint" style="align-self:center">按钮：观众点击弹窗；图片：填 URL 生成 ![](url)</span>
+                  </div>
                 </div>
                 <div class="form-row">
                   <label>正文 * <span class="hint">富文本 / Markdown 两种模式，存库统一是 Markdown</span></label>

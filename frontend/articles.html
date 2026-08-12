@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>文章 - 小戡的博客</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <meta name="description" content="????? - ?????????????RSS ???">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -23,7 +24,11 @@
   <main>
     <section class="section">
       <fieldset>
-        <legend>全部文章</legend>
+        <legend>全部文章 <a class="admin-link" href="api/feed.xml" target="_blank" rel="noopener">RSS</a></legend>
+        <div class="mb8" style="display:flex;gap:8px;flex-wrap:wrap">
+          <input class="field" type="text" id="search-input" placeholder="搜索文章…" style="max-width:280px">
+          <div id="tag-filter" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+        </div>
         <div id="article-list" class="win flat"><p class="muted px12">加载中…</p></div>
       </fieldset>
     </section>

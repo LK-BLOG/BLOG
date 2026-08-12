@@ -97,6 +97,36 @@
     });
   }
 
+  function bindPopups() {
+    document.querySelectorAll(".popup-btn").forEach(function (btn) {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", function () {
+        showWin98Popup(btn.getAttribute("data-msg") || "");
+      });
+    });
+  }
+
+  function showWin98Popup(msg) {
+    var old = document.getElementById("popup-overlay");
+    if (old) old.remove();
+    var ov = document.createElement("div");
+    ov.id = "popup-overlay";
+    ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;";
+    var win = document.createElement("div");
+    win.className = "win";
+    win.style.cssText = "width:340px;max-width:90vw;";
+    win.innerHTML =
+      '<div class="win-title"><span class="win-label">互动弹窗</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>' +
+      '<div class="win-body"><p style="white-space:pre-wrap;word-break:break-word">' + Blog.escapeHtml(msg) + "</p>" +
+      '<div style="text-align:right;margin-top:10px"><button class="btn primary" id="popup-ok">确定</button></div></div>';
+    ov.appendChild(win);
+    document.body.appendChild(ov);
+    var ok = document.getElementById("popup-ok");
+    if (ok) ok.addEventListener("click", function () { ov.remove(); });
+    ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); });
+  }
+
   function loadComments() {
     cmtList.innerHTML = '<p class="muted">加载中…</p>';
     Blog.api("/api/articles/" + encodeURIComponent(slug) + "/comments").then(function (data) {
@@ -120,11 +150,14 @@
         '<div class="win-title"><span class="win-label">📖 ' + esc(a.title) + '</span><span class="win-dots"><span class="dot"></span></span></div>' +
         '<div class="win-body">' +
           '<p class="post-meta">发布 ' + esc(Blog.fmtDate(a.created_at)) +
-          (a.updated_at && a.updated_at !== a.created_at ? " · 更新 " + esc(Blog.fmtDate(a.updated_at)) : "") + "</p>" +
+          (a.updated_at && a.updated_at !== a.created_at ? " · 更新 " + esc(Blog.fmtDate(a.updated_at)) : "") +
+          " · " + (a.views || 0) + " 次浏览" +
+          (a.tags ? " · " + esc(a.tags).split(",").map(function (t) { return "#" + t.trim(); }).filter(Boolean).join(" ") : "") + "</p>" +
           '<div class="markdown-body">' + (window.DOMPurify ? DOMPurify.sanitize(marked.parse(a.content_md)) : marked.parse(a.content_md)) + "</div>" +
         "</div>";
       commentsBox.classList.remove("hidden");
       renderAuth();
+      bindPopups();
       loadComments();
     }).catch(function (err) {
       box.innerHTML = '<div class="win-body"><div class="alert error">加载失败：' + esc(err.message) + "</div></div>";

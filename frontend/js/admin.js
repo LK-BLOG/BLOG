@@ -39,6 +39,27 @@
     }
     $("mode-rich").addEventListener("click", function () { setEditorMode("rich"); });
     $("mode-md").addEventListener("click", function () { setEditorMode("md"); });
+    var imgBtn = $("e-img-url");
+    if (imgBtn) imgBtn.addEventListener("click", function () {
+      var url = prompt("图片链接 URL（外链或上传后的地址）");
+      if (!url) return;
+      setEditorMode("md");
+      var ta = $("e-content");
+      ta.value = (ta.value ? ta.value + "\n\n" : "") + "![图片](" + url + ")\n";
+      ta.focus();
+    });
+    var popupBtn = $("e-popup");
+    if (popupBtn) popupBtn.addEventListener("click", function () {
+      var text = prompt("按钮文字（观众点击的按钮）");
+      if (!text) return;
+      var msg = prompt("点击后弹窗内容");
+      if (!msg) return;
+      var html = '<button class="popup-btn" data-msg="' + Blog.escapeHtml(msg) + '">' + Blog.escapeHtml(text) + "</button>";
+      setEditorMode("md");
+      var ta2 = $("e-content");
+      ta2.value = (ta2.value ? ta2.value + "\n\n" : "") + html + "\n";
+      ta2.focus();
+    });
   }
 
   function mdToHtml(md) {
@@ -200,6 +221,7 @@
     $("e-title").value = "";
     $("e-slug").value = "";
     $("e-slug").readOnly = false;
+    if ($("e-tags")) $("e-tags").value = "";
     setMarkdown("");
     setEditorMode("rich");
     $("editor-title").textContent = slug ? "编辑文章：" + slug : "写新文章";
@@ -209,6 +231,7 @@
         $("e-title").value = a.title;
         $("e-slug").value = a.slug;
         $("e-slug").readOnly = true;
+        if ($("e-tags")) $("e-tags").value = a.tags || "";
         setMarkdown(a.content_md);
       }).catch(function (err) {
         showAlert("editor-alert", "加载文章失败：" + err.message);
@@ -224,7 +247,7 @@
     var slug = $("e-slug").value.trim();
     if (!slug) slug = "post-" + Date.now();
 
-    var payload = { title: title, slug: slug, content_md: content };
+    var payload = { title: title, slug: slug, content_md: content, tags: $("e-tags") ? $("e-tags").value.trim() : "" };
     var req = editingSlug
       ? Blog.api("/api/articles/" + encodeURIComponent(editingSlug), { method: "PUT", body: payload })
       : Blog.api("/api/articles", { method: "POST", body: payload });
@@ -289,7 +312,8 @@
           ops += "<button class='btn " + (u.role === "admin" ? "primary" : "") + "' data-role='" + u.username + "' data-set='admin'>管理员</button> ";
           ops += "<button class='btn " + (u.role === "user" ? "primary" : "") + "' data-role='" + u.username + "' data-set='user'>普通</button> ";
           ops += "<button class='btn " + (u.banned ? "" : "danger") + "' data-ban='" + u.username + "' data-state='" + (u.banned ? "0" : "1") + "'>" + (u.banned ? "解封" : "封禁") + "</button> ";
-          ops += "<button class='btn danger' data-del='" + u.username + "'>删除</button>";
+          ops += "<button class='btn danger' data-del='" + u.username + "'>删除</button> ";
+          ops += "<button class='btn' data-resetpw='" + u.username + "'>重置密码</button>";
         } else {
           ops = '<span class="muted px12">不可操作</span>';
         }
@@ -306,6 +330,15 @@
           Blog.api("/api/users/" + encodeURIComponent(b.dataset.role) + "/role", { method: "PUT", body: { role: b.dataset.set } })
             .then(function () { loadUsers(); })
             .catch(function (err) { alert("设置失败：" + err.message); });
+        });
+      });
+      box.querySelectorAll("[data-resetpw]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var np = prompt("为 " + b.dataset.resetpw + " 设置新密码（6-72 位）");
+          if (!np || np.length < 6) { alert("密码至少 6 位"); return; }
+          Blog.api("/api/users/" + encodeURIComponent(b.dataset.resetpw) + "/password", { method: "PUT", body: { new_password: np } })
+            .then(function () { alert("已重置"); })
+            .catch(function (err) { alert("重置失败：" + err.message); });
         });
       });
       box.querySelectorAll("[data-ban]").forEach(function (b) {

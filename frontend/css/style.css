@@ -452,3 +452,17 @@ th { background: var(--face); }
 .chat-typing { padding: 4px 10px; font-size: 12px; color: var(--dim); border-top: 1px solid var(--shadow); }
 .chat-input-row { display: flex; gap: 6px; padding: 8px; background: var(--face); border-top: 2px solid var(--hl); }
 .chat-input-row .field { flex: 1; }
+/* 文章互动按钮（观众点击弹窗） */
+.popup-btn {
+  background: var(--face);
+  border: 2px solid;
+  border-color: var(--hl) var(--dark) var(--dark) var(--hl);
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+}
+.popup-btn:active {
+  border-color: var(--dark) var(--hl) var(--hl) var(--dark);
+}

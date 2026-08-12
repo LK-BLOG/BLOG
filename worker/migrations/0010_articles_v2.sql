@@ -1,0 +1,3 @@
+-- 文章升级：浏览量 / 标签
+ALTER TABLE articles ADD COLUMN views INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE articles ADD COLUMN tags TEXT NOT NULL DEFAULT '';

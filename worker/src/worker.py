@@ -4,6 +4,7 @@
 # 路由前缀统一 /api/*
 # ============================================================
 import base64
+import html
 import hashlib
 import json
 import hmac
@@ -13,6 +14,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from workers import WorkerEntrypoint
@@ -145,6 +147,16 @@ class ArticleIn(BaseModel):
     slug: str = Field(min_length=1, max_length=120)
     title: str = Field(min_length=1, max_length=200)
     content_md: str = Field(min_length=1, max_length=100000)
+    tags: str = Field(default="", max_length=200)
+
+
+class PasswordIn(BaseModel):
+    old_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=6, max_length=72)
+
+
+class ResetPasswordIn(BaseModel):
+    new_password: str = Field(min_length=6, max_length=72)
 
 
 class ChatIn(BaseModel):
@@ -321,23 +333,39 @@ async def update_me(body: RegisterIn, request: Request):
     return {"ok": True, "display_name": display_name}
 
 
+@app.put("/api/me/password")
+async def change_password(body: PasswordIn, request: Request):
+    username, user_role = _require_auth(request)
+    if user_role == "admin":
+        raise HTTPException(status_code=400, detail="管理员密码请通过 Cloudflare 配置修改")
+    db = _db(request)
+    row = await db.prepare("SELECT password_hash FROM users WHERE username = ?").bind(username).first()
+    if not row or not _verify_password(body.old_password, row["password_hash"]):
+        raise HTTPException(status_code=400, detail="旧密码错误")
+    await db.prepare("UPDATE users SET password_hash = ? WHERE username = ?").bind(_hash_password(body.new_password), username).run()
+    return {"ok": True}
+
+
 # ---------- 文章 ----------
 
 @app.get("/api/articles")
 async def list_articles(request: Request):
     res = await _db(request).prepare(
-        "SELECT slug, title, created_at, updated_at FROM articles ORDER BY created_at DESC"
+        "SELECT slug, title, tags, views, created_at, updated_at FROM articles ORDER BY created_at DESC"
     ).all()
     return {"articles": res.results}
 
 
 @app.get("/api/articles/{slug}")
 async def get_article(slug: str, request: Request):
-    row = await _db(request).prepare(
-        "SELECT slug, title, content_md, created_at, updated_at FROM articles WHERE slug = ?"
+    db = _db(request)
+    row = await db.prepare(
+        "SELECT slug, title, content_md, tags, views, created_at, updated_at FROM articles WHERE slug = ?"
     ).bind(slug).first()
     if not row:
         raise HTTPException(status_code=404, detail="文章不存在")
+    await db.prepare("UPDATE articles SET views = views + 1 WHERE slug = ?").bind(slug).run()
+    row["views"] = int(row.get("views") or 0) + 1
     return row
 
 
@@ -351,9 +379,10 @@ async def create_article(body: ArticleIn, request: Request):
     if dup:
         raise HTTPException(status_code=409, detail="slug 已存在，换个标识")
     now = _now_iso()
+    tags = body.tags.strip()
     await _db(request).prepare(
-        "INSERT INTO articles (slug, title, content_md, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
-    ).bind(slug, body.title.strip(), body.content_md, now, now).run()
+        "INSERT INTO articles (slug, title, content_md, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(slug, body.title.strip(), body.content_md, tags, now, now).run()
     return {"ok": True, "slug": slug}
 
 
@@ -361,8 +390,8 @@ async def create_article(body: ArticleIn, request: Request):
 async def update_article(slug: str, body: ArticleIn, request: Request):
     _check_admin(request)
     res = await _db(request).prepare(
-        "UPDATE articles SET title = ?, content_md = ?, updated_at = ? WHERE slug = ?"
-    ).bind(body.title.strip(), body.content_md, _now_iso(), slug).run()
+        "UPDATE articles SET title = ?, content_md = ?, tags = ?, updated_at = ? WHERE slug = ?"
+    ).bind(body.title.strip(), body.content_md, body.tags.strip(), _now_iso(), slug).run()
     if not res.meta.changes:
         raise HTTPException(status_code=404, detail="文章不存在")
     return {"ok": True, "slug": slug}
@@ -934,6 +963,18 @@ async def set_user_role(username: str, body: UserRoleIn, request: Request):
     return {"ok": True, "username": username, "role": body.role}
 
 
+@app.put("/api/users/{username}/password")
+async def reset_user_password(username: str, body: ResetPasswordIn, request: Request):
+    _check_admin(request)
+    if username == "admin":
+        raise HTTPException(status_code=400, detail="不能重置内置管理员密码")
+    db = _db(request)
+    res = await db.prepare("UPDATE users SET password_hash = ? WHERE username = ?").bind(_hash_password(body.new_password), username).run()
+    if not res.meta.changes:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {"ok": True}
+
+
 @app.delete("/api/users/{username}")
 async def delete_user(username: str, request: Request):
     _check_admin(request)
@@ -1025,6 +1066,46 @@ async def list_reports(request: Request):
         "SELECT id, target_type, target_id, reason, reporter, status, content, created_at FROM reports ORDER BY id DESC LIMIT 100"
     ).all()
     return {"reports": res.results}
+
+
+# ---------- RSS / Sitemap ----------
+
+@app.get("/api/feed.xml")
+async def feed(request: Request):
+    res = await _db(request).prepare(
+        "SELECT slug, title, created_at FROM articles ORDER BY created_at DESC LIMIT 20"
+    ).all()
+    base = "https://xiaokan-esn.pages.dev"
+    items = []
+    for a in res.results:
+        link = base + "/article.html?slug=" + a["slug"]
+        items.append(
+            "<item><title>%s</title><link>%s</link><guid>%s</guid><pubDate>%s</pubDate></item>"
+            % (html.escape(a["title"]), link, link, html.escape(a["created_at"]))
+        )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<rss version="2.0"><channel>'
+        "<title>%s</title><link>%s</link><description>%s</description>%s"
+        "</channel></rss>"
+    ) % ("小戡的博客", base, "Win98 复古风个人主页", "".join(items))
+    return Response(content=xml, media_type="application/xml")
+
+
+@app.get("/api/sitemap.xml")
+async def sitemap(request: Request):
+    res = await _db(request).prepare(
+        "SELECT slug FROM articles ORDER BY id ASC"
+    ).all()
+    base = "https://xiaokan-esn.pages.dev"
+    urls = ["<url><loc>%s</loc></url>" % base]
+    for a in res.results:
+        urls.append("<url><loc>%s/article.html?slug=%s</loc></url>" % (base, a["slug"]))
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">%s</urlset>'
+    ) % "".join(urls)
+    return Response(content=xml, media_type="application/xml")
 
 
 # ---------- Worker 入口 ----------
