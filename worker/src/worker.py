@@ -330,15 +330,19 @@ async def chat(body: ChatIn, request: Request):
         "temperature": 0.7,
     }
 
-    from js import fetch
-    resp = await fetch(ZEN_URL, {
-        "method": "POST",
-        "headers": {
-            "Authorization": "Bearer " + key,
-            "Content-Type": "application/json",
-        },
-        "body": json.dumps(payload),
-    })
+    from workers import fetch
+    try:
+        resp = await fetch(
+            ZEN_URL,
+            method="POST",
+            headers={
+                "Authorization": "Bearer " + key,
+                "Content-Type": "application/json",
+            },
+            body=json.dumps(payload),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="机器人连接开小差了：" + str(exc)[:120])
     if resp.status != 200:
         text = await resp.text()
         raise HTTPException(status_code=502, detail="机器人开小差了：" + text[:120])
