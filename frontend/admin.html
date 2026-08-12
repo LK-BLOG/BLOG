@@ -6,6 +6,13 @@
   <title>管理后台 - 小戡的博客</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="lib/quill.snow.css">
+  <style>
+    #e-quill { border: 2px inset; border-color: #808080 #fff #fff #808080; background: #fff; }
+    #e-quill .ql-editor { min-height: 240px; font-family: inherit; font-size: 14px; }
+    .ql-toolbar.ql-snow { border: 2px solid !important; border-color: #fff #808080 #808080 #fff !important; background: #c0c0c0; }
+    .ql-container.ql-snow { border: none !important; }
+  </style>
 </head>
 <body>
 
@@ -63,11 +70,16 @@
                   <input class="field" type="text" id="e-slug" maxlength="120" placeholder="留空自动生成">
                 </div>
                 <div class="form-row">
-                  <label for="e-content">正文（Markdown）*</label>
-                  <textarea class="field" id="e-content" style="min-height:260px" required></textarea>
+                  <label>正文 * <span class="hint">富文本 / Markdown 两种模式，存库统一是 Markdown</span></label>
+                  <div class="mb8" style="display:flex;gap:8px">
+                    <button type="button" class="btn primary" id="mode-rich">✍️ 富文本</button>
+                    <button type="button" class="btn" id="mode-md"># Markdown</button>
+                  </div>
+                  <div id="e-quill-wrap"><div id="e-quill"></div></div>
+                  <textarea class="field hidden" id="e-content" style="min-height:260px"></textarea>
                 </div>
                 <div class="mb16">
-                  <button type="button" class="btn" id="preview-toggle">预览 Markdown</button>
+                  <button type="button" class="btn" id="preview-toggle">预览</button>
                 </div>
                 <div id="e-preview" class="hidden markdown-body win flat mb16"></div>
                 <div style="display:flex;gap:8px">
@@ -92,6 +104,8 @@
   <script src="js/config.js"></script>
   <script src="js/common.js"></script>
   <script src="lib/marked.min.js"></script>
+  <script src="lib/quill.js"></script>
+  <script src="lib/turndown.js"></script>
   <script src="js/admin.js"></script>
 </body>
 </html>

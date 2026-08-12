@@ -12,6 +12,64 @@
   }
 
   /* ---------- 登录 ---------- */
+
+  /* ---------- 富文本编辑器（Quill + Turndown） ---------- */
+  var quill = null;
+  var turndown = null;
+  var editorMode = "rich";
+
+  function initEditor() {
+    if (window.Quill) {
+      quill = new Quill("#e-quill", {
+        theme: "snow",
+        placeholder: "在这里写正文…",
+        modules: {
+          toolbar: [
+            [{ header: [1, 2, 3, false] }],
+            ["bold", "italic", "underline", "strike"],
+            [{ list: "ordered" }, { list: "bullet" }],
+            ["blockquote", "code-block"],
+            ["link", "clean"]
+          ]
+        }
+      });
+    }
+    if (window.TurndownService) {
+      turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-" });
+    }
+    $("mode-rich").addEventListener("click", function () { setEditorMode("rich"); });
+    $("mode-md").addEventListener("click", function () { setEditorMode("md"); });
+  }
+
+  function setEditorMode(mode) {
+    editorMode = mode;
+    var isRich = mode === "rich";
+    $("e-quill-wrap").classList.toggle("hidden", !isRich);
+    $("e-content").classList.toggle("hidden", isRich);
+    $("mode-rich").classList.toggle("primary", isRich);
+    $("mode-md").classList.toggle("primary", !isRich);
+    if (isRich && quill) {
+      quill.clipboard.dangerouslyPasteHTML(marked.parse(getMarkdown() || ""));
+    } else {
+      $("e-content").value = getMarkdown();
+    }
+  }
+
+  function getMarkdown() {
+    if (editorMode === "rich" && quill) {
+      var html = quill.getSemanticHTML();
+      return turndown ? turndown.turndown(html) : html;
+    }
+    return $("e-content").value;
+  }
+
+  function setMarkdown(md) {
+    $("e-content").value = md || "";
+    if (quill) quill.setContents([]);
+    if (quill && editorMode === "rich") {
+      quill.clipboard.dangerouslyPasteHTML(marked.parse(md || ""));
+    }
+  }
   function init() {
     if (Blog.isAuthed()) { enterPanel(); return; }
     $("login-form").addEventListener("submit", function (e) {
@@ -55,7 +113,7 @@
     $("preview-toggle").addEventListener("click", function () {
       var pv = $("e-preview");
       if (pv.classList.contains("hidden")) {
-        pv.innerHTML = marked.parse($("e-content").value || "");
+        pv.innerHTML = marked.parse(getMarkdown() || "");
         pv.classList.remove("hidden");
       } else {
         pv.classList.add("hidden");
@@ -117,7 +175,8 @@
     $("e-title").value = "";
     $("e-slug").value = "";
     $("e-slug").readOnly = false;
-    $("e-content").value = "";
+    setMarkdown("");
+    setEditorMode("rich");
     $("editor-title").textContent = slug ? "编辑文章：" + slug : "写新文章";
     switchTab("editor");
     if (slug) {
@@ -125,7 +184,7 @@
         $("e-title").value = a.title;
         $("e-slug").value = a.slug;
         $("e-slug").readOnly = true;
-        $("e-content").value = a.content_md;
+        setMarkdown(a.content_md);
       }).catch(function (err) {
         showAlert("editor-alert", "加载文章失败：" + err.message);
       });
@@ -135,7 +194,7 @@
   function saveArticle(e) {
     e.preventDefault();
     var title = $("e-title").value.trim();
-    var content = $("e-content").value.trim();
+    var content = getMarkdown().trim();
     if (!title || !content) { showAlert("editor-alert", "标题和正文都不能为空。"); return; }
     var slug = $("e-slug").value.trim();
     if (!slug) slug = "post-" + Date.now();
@@ -186,4 +245,5 @@
   }
 
   init();
+  initEditor();
 })();
