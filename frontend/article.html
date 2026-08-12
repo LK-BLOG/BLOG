@@ -28,16 +28,17 @@
         <div class="win-title"><span class="win-label">💬 评论区</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
         <div class="win-body">
           <div id="cmt-alert"></div>
-          <form id="cmt-form" class="mb16">
+          <div id="cmt-auth" class="mb16"></div>
+          <form id="cmt-form" class="mb16 hidden">
             <div class="form-row">
-              <label for="cmt-nickname">昵称</label>
-              <input class="field" type="text" id="cmt-nickname" maxlength="30" placeholder="你的名字（必填）" required>
+              <label for="cmt-content">内容 <span class="hint" id="cmt-replyto"></span></label>
+              <textarea class="field" id="cmt-content" maxlength="500" placeholder="说点什么…最多 500 字；以 @Bot 开头可以召唤机器人" required></textarea>
             </div>
-            <div class="form-row">
-              <label for="cmt-content">内容</label>
-              <textarea class="field" id="cmt-content" maxlength="500" placeholder="说点什么…（必填，500 字以内）" required></textarea>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn" id="cmt-atbot">@Bot 召唤机器人</button>
+              <button type="submit" class="btn primary">发表评论</button>
+              <button type="button" class="btn hidden" id="cmt-cancel-reply">取消回复</button>
             </div>
-            <button type="submit" class="btn primary">发表评论</button>
           </form>
           <div id="cmt-list"></div>
         </div>

@@ -274,7 +274,7 @@
         box.innerHTML = '<p class="muted px12">还没有用户。</p>';
         return;
       }
-      var html = '<table><tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th style="width:130px">注册时间</th><th style="width:150px">操作</th></tr>';
+      var html = '<table><tr><th>ID</th><th>用户名</th><th>名称</th><th>角色</th><th>状态</th><th style="width:130px">注册时间</th><th style="width:150px">操作</th></tr>';
       list.forEach(function (u) {
         var status = u.banned ? '已封禁' : (u.username === "admin" ? '管理员' : '正常');
         var ops = '';
@@ -287,7 +287,7 @@
         } else {
           ops = '<span class="muted px12">不可操作</span>';
         }
-        html += "<tr><td>" + u.id + "</td><td>" + Blog.escapeHtml(u.username) + "</td><td>" +
+        html += "<tr><td>" + u.id + "</td><td>" + Blog.escapeHtml(u.username) + "</td><td>" + Blog.escapeHtml(u.display_name || "-") + "</td><td>" +
           (u.role === "admin" ? "管理员" : (u.role === "moderator" ? "协管" : "普通")) + "</td><td>" + status + "</td><td class='nowrap'>" +
           Blog.escapeHtml(Blog.fmtDate(u.created_at)) + "</td><td>" + ops + "</td></tr>";
       });

@@ -45,6 +45,10 @@
               <input class="field" type="text" id="r-username" maxlength="20" autocomplete="username" required>
             </div>
             <div class="form-row">
+              <label for="r-name">显示名称 <span class="hint">评论时展示的名字，1-30 位</span></label>
+              <input class="field" type="text" id="r-name" maxlength="30" required>
+            </div>
+            <div class="form-row">
               <label for="r-password">密码 <span class="hint">6-72 位</span></label>
               <input class="field" type="password" id="r-password" maxlength="72" autocomplete="new-password" required>
             </div>
@@ -81,7 +85,7 @@
     }
     function finish(data) {
       Blog.setToken(data.token);
-      Blog.setUser(data.username, data.role);
+      Blog.setUser(data.username, data.role, data.display_name);
       location.href = next;
     }
 
@@ -102,10 +106,12 @@
       e.preventDefault();
       var u = $("r-username").value.trim();
       var p = $("r-password").value;
+      var n = $("r-name").value.trim();
       if (p !== $("r-password2").value) { show("两次密码不一致"); return; }
+      if (!n) { show("请填写显示名称"); return; }
       var btn = this.querySelector("button");
       btn.disabled = true;
-      Blog.api("/api/register", { method: "POST", body: { username: u, password: p } })
+      Blog.api("/api/register", { method: "POST", body: { username: u, password: p, display_name: n } })
         .then(finish)
         .catch(function (err) { show(err.message || "注册失败"); })
         .finally(function () { btn.disabled = false; });

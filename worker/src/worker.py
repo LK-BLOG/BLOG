@@ -138,6 +138,7 @@ class LoginIn(BaseModel):
 class RegisterIn(BaseModel):
     username: str = Field(min_length=1, max_length=20)
     password: str = Field(min_length=1, max_length=200)
+    display_name: str = Field(min_length=1, max_length=30)
 
 
 class ArticleIn(BaseModel):
@@ -162,8 +163,9 @@ class UserRoleIn(BaseModel):
     role: str = Field(pattern="^(admin|moderator|user)$")
 
 class MessageIn(BaseModel):
-    nickname: str = Field(min_length=1, max_length=30)
+    nickname: str | None = Field(default=None, max_length=30)
     content: str = Field(min_length=1, max_length=500)
+    parent_id: int | None = Field(default=None, ge=0)
 
     @field_validator("nickname", "content")
     @classmethod
@@ -228,9 +230,12 @@ async def login(body: LoginIn, request: Request):
     ok = False
     if username == "admin":
         ok = hmac.compare_digest(body.password, getattr(env, "ADMIN_PASSWORD", ""))
+        if ok:
+            await _clear_login_fails(db, ip, username)
+            return {"token": _make_token("admin", "admin", env), "username": "admin", "role": "admin", "display_name": "骆戡"}
     elif USERNAME_RE.match(username):
         row = await db.prepare(
-            "SELECT id, password_hash, role, banned, banned_until FROM users WHERE username = ?"
+            "SELECT id, password_hash, role, banned, banned_until, display_name FROM users WHERE username = ?"
         ).bind(username).first()
         if row:
             still_banned = await _auto_unban_if_expired(db, row["id"], row["banned"], row["banned_until"])
@@ -239,11 +244,7 @@ async def login(body: LoginIn, request: Request):
         ok = bool(row) and _verify_password(body.password, row["password_hash"])
         if ok:
             await _clear_login_fails(db, ip, username)
-            return {"token": _make_token(username, row["role"], env), "username": username, "role": row["role"]}
-
-    if username == "admin" and ok:
-        await _clear_login_fails(db, ip, username)
-        return {"token": _make_token("admin", "admin", env), "username": "admin", "role": "admin"}
+            return {"token": _make_token(username, row["role"], env), "username": username, "role": row["role"], "display_name": row["display_name"] or username}
 
     await _record_login_fail(db, ip, username)
     raise HTTPException(status_code=401, detail="用户名或密码错误")
@@ -258,6 +259,9 @@ async def register(body: RegisterIn, request: Request):
         raise HTTPException(status_code=400, detail="用户名只能包含字母、数字、下划线（2-20 位）")
     if len(body.password) < PASSWORD_MIN or len(body.password) > PASSWORD_MAX:
         raise HTTPException(status_code=400, detail="密码长度需为 6-72 位")
+    display_name = body.display_name.strip()
+    if not display_name:
+        raise HTTPException(status_code=400, detail="请填写显示名称")
     db = _db(request)
     dup = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
     if dup:
@@ -291,9 +295,24 @@ async def register(body: RegisterIn, request: Request):
         "THEN register_daily_limits.count + 1 ELSE 1 END, date = excluded.date"
     ).bind(ip, today).run()
     await db.prepare(
-        "INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, 'user', ?)"
-    ).bind(username, _hash_password(body.password), _now_iso()).run()
-    return {"token": _make_token(username, "user", request.scope["env"]), "username": username, "role": "user"}
+        "INSERT INTO users (username, password_hash, role, display_name, created_at) VALUES (?, ?, 'user', ?, ?)"
+    ).bind(username, _hash_password(body.password), display_name, _now_iso()).run()
+    return {"token": _make_token(username, "user", request.scope["env"]), "username": username, "role": "user", "display_name": display_name}
+
+
+@app.put("/api/me")
+async def update_me(body: RegisterIn, request: Request):
+    username, user_role = _require_auth(request)
+    if user_role == "admin":
+        raise HTTPException(status_code=400, detail="管理员名称不可修改")
+    display_name = body.display_name.strip()
+    if not display_name:
+        raise HTTPException(status_code=400, detail="请填写显示名称")
+    db = _db(request)
+    res = await db.prepare("UPDATE users SET display_name = ? WHERE username = ?").bind(display_name, username).run()
+    if not res.meta.changes:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {"ok": True, "display_name": display_name}
 
 
 # ---------- 文章 ----------
@@ -356,40 +375,85 @@ async def delete_article(slug: str, request: Request):
 
 @app.get("/api/messages")
 async def list_messages(request: Request):
-    res = await _db(request).prepare(
-        "SELECT id, nickname, content, created_at FROM messages ORDER BY id DESC LIMIT ?"
+    db = _db(request)
+    res = await db.prepare(
+        "SELECT id, nickname, content, created_at, user_id FROM messages ORDER BY id DESC LIMIT ?"
     ).bind(MAX_MESSAGES).all()
-    return {"messages": res.results}
+    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    can_mod = False
+    my_id = None
+    if parsed:
+        uname, role = parsed
+        if role in ("admin", "moderator"):
+            can_mod = True
+        else:
+            urow = await db.prepare("SELECT id FROM users WHERE username = ?").bind(uname).first()
+            my_id = urow["id"] if urow else None
+    out = []
+    for m in res.results:
+        m["is_mine"] = bool(can_mod or (my_id is not None and m.get("user_id") == my_id))
+        out.append(m)
+    return {"messages": out}
 
 
 @app.post("/api/messages")
 async def create_message(body: MessageIn, request: Request):
+    db = _db(request)
     ip = _client_ip(request)
     now_ts = int(time.time())
-    db = _db(request)
+    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    is_privileged = False
+    user_id = None
+    nickname = None
+    if parsed:
+        username, role = parsed
+        if role in ("admin", "moderator"):
+            is_privileged = True
+        if role == "admin":
+            nickname = "骆戡"
+        else:
+            urow = await db.prepare("SELECT id, display_name, banned FROM users WHERE username = ?").bind(username).first()
+            if urow and urow["banned"]:
+                raise HTTPException(status_code=403, detail="账号已被封禁")
+            if urow:
+                user_id = urow["id"]
+                nickname = urow["display_name"] or username
+    if nickname is None:
+        nickname = (body.nickname or "").strip()
+        if not nickname:
+            raise HTTPException(status_code=400, detail="请填写昵称")
 
-    # 限频：同一 IP 60 秒内只能发一条
-    row = await db.prepare("SELECT last_post_at FROM rate_limits WHERE ip = ?").bind(ip).first()
-    if row and (now_ts - int(row["last_post_at"])) < RATE_LIMIT_SECONDS:
-        raise HTTPException(status_code=429, detail="留言太频繁，请 60 秒后再试")
+    # 限频：同一 IP 60 秒内只能发一条（管理员/协管不限）
+    if not is_privileged:
+        row = await db.prepare("SELECT last_post_at FROM rate_limits WHERE ip = ?").bind(ip).first()
+        if row and (now_ts - int(row["last_post_at"])) < RATE_LIMIT_SECONDS:
+            raise HTTPException(status_code=429, detail="留言太频繁，请 60 秒后再试")
+        await db.prepare(
+            "INSERT INTO rate_limits (ip, last_post_at) VALUES (?, ?) "
+            "ON CONFLICT(ip) DO UPDATE SET last_post_at = excluded.last_post_at"
+        ).bind(ip, now_ts).run()
 
     await db.prepare(
-        "INSERT INTO rate_limits (ip, last_post_at) VALUES (?, ?) "
-        "ON CONFLICT(ip) DO UPDATE SET last_post_at = excluded.last_post_at"
-    ).bind(ip, now_ts).run()
-
-    await db.prepare(
-        "INSERT INTO messages (nickname, content, created_at) VALUES (?, ?, ?)"
-    ).bind(body.nickname.strip(), body.content.strip(), _now_iso()).run()
+        "INSERT INTO messages (nickname, content, created_at, user_id) VALUES (?, ?, ?, ?)"
+    ).bind(nickname, body.content.strip(), _now_iso(), user_id).run()
     return {"ok": True}
 
 
 @app.delete("/api/messages/{message_id}")
 async def delete_message(message_id: int, request: Request):
-    _check_moderator(request)
-    res = await _db(request).prepare("DELETE FROM messages WHERE id = ?").bind(message_id).run()
-    if not res.meta.changes:
+    db = _db(request)
+    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    if not parsed:
+        raise HTTPException(status_code=401, detail="请先登录")
+    username, role = parsed
+    row = await db.prepare("SELECT id, user_id FROM messages WHERE id = ?").bind(message_id).first()
+    if not row:
         raise HTTPException(status_code=404, detail="留言不存在")
+    if role not in ("admin", "moderator"):
+        urow = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
+        if not urow or row["user_id"] is None or urow["id"] != row["user_id"]:
+            raise HTTPException(status_code=403, detail="只能删除自己的留言")
+    await db.prepare("DELETE FROM messages WHERE id = ?").bind(message_id).run()
     return {"ok": True}
 
 
@@ -398,31 +462,91 @@ async def delete_message(message_id: int, request: Request):
 
 @app.get("/api/articles/{slug}/comments")
 async def list_comments(slug: str, request: Request):
-    res = await _db(request).prepare(
-        "SELECT id, nickname, content, created_at FROM comments "
+    db = _db(request)
+    res = await db.prepare(
+        "SELECT id, nickname, content, created_at, user_id, parent_id, is_bot FROM comments "
         "WHERE article_slug = ? ORDER BY id ASC LIMIT 500"
     ).bind(slug).all()
-    return {"comments": res.results}
+    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    can_mod = False
+    my_id = None
+    if parsed:
+        uname, role = parsed
+        if role in ("admin", "moderator"):
+            can_mod = True
+        else:
+            urow = await db.prepare("SELECT id FROM users WHERE username = ?").bind(uname).first()
+            my_id = urow["id"] if urow else None
+    out = []
+    for c in res.results:
+        c["is_mine"] = bool(can_mod or (my_id is not None and c.get("user_id") == my_id))
+        out.append(c)
+    return {"comments": out}
 
 
 @app.post("/api/articles/{slug}/comments")
 async def create_comment(slug: str, body: MessageIn, request: Request):
+    username, user_role = _require_auth(request)
     db = _db(request)
-    article = await db.prepare("SELECT id FROM articles WHERE slug = ?").bind(slug).first()
+    article = await db.prepare("SELECT id, title, content_md FROM articles WHERE slug = ?").bind(slug).first()
     if not article:
         raise HTTPException(status_code=404, detail="文章不存在")
+    if user_role == "admin":
+        nickname = "骆戡"
+        user_id = None
+        is_privileged = True
+    else:
+        urow = await db.prepare("SELECT id, display_name, banned FROM users WHERE username = ?").bind(username).first()
+        if not urow:
+            raise HTTPException(status_code=401, detail="账号不存在，请重新登录")
+        if urow["banned"]:
+            raise HTTPException(status_code=403, detail="账号已被封禁")
+        user_id = urow["id"]
+        nickname = urow["display_name"] or username
+        is_privileged = user_role == "moderator"
+
+    parent_id = body.parent_id or 0
+    if parent_id:
+        p = await db.prepare("SELECT id FROM comments WHERE id = ? AND article_slug = ?").bind(parent_id, slug).first()
+        if not p:
+            raise HTTPException(status_code=400, detail="回复的评论不存在")
+
     ip = _client_ip(request)
     now_ts = int(time.time())
-    row = await db.prepare("SELECT last_post_at FROM comment_rate_limits WHERE ip = ?").bind(ip).first()
-    if row and (now_ts - int(row["last_post_at"])) < RATE_LIMIT_SECONDS:
-        raise HTTPException(status_code=429, detail="评论太频繁，请 60 秒后再试")
+    if not is_privileged:
+        row = await db.prepare("SELECT last_post_at FROM comment_rate_limits WHERE ip = ?").bind(ip).first()
+        if row and (now_ts - int(row["last_post_at"])) < RATE_LIMIT_SECONDS:
+            raise HTTPException(status_code=429, detail="评论太频繁，请 60 秒后再试")
+        await db.prepare(
+            "INSERT INTO comment_rate_limits (ip, last_post_at) VALUES (?, ?) "
+            "ON CONFLICT(ip) DO UPDATE SET last_post_at = excluded.last_post_at"
+        ).bind(ip, now_ts).run()
+
+    content = body.content.strip()
+    mention = content[:20].lower()
+    is_mention = mention.startswith("@bot") or mention.startswith("@机器人") or mention.startswith("@小戡")
+    if is_mention:
+        env = request.scope["env"]
+        base = (
+            "你是「小戡的博客」的 AI 机器人，由博主小戡（骆戡）部署。"
+            "回答用简体中文，简洁、友好、带点幽默，别嗠嗦，尽量控制在 200 字以内。"
+            "博主是小戡（骆戡），本站是 Vibe Coding 产物。"
+        )
+        prompt = base + "用户在文章评论区 @ 了你。当前文章《%s》：\n%s\n请根据上文回答用户的问题；如果用户要求分析文章，就基于文章内容分析；其他问题正常回答。" % (
+            article["title"], str(article["content_md"])[:2000]
+        )
+        reply = await _call_bot(env, prompt, [{"role": "user", "content": content}])
+        await db.prepare(
+            "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, ?, ?, 0)"
+        ).bind(slug, nickname, content, _now_iso(), user_id, parent_id).run()
+        await db.prepare(
+            "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, NULL, ?, 1)"
+        ).bind(slug, "🤖 小戡的机器人", reply, _now_iso(), parent_id).run()
+        return {"ok": True, "bot_reply": reply}
+
     await db.prepare(
-        "INSERT INTO comment_rate_limits (ip, last_post_at) VALUES (?, ?) "
-        "ON CONFLICT(ip) DO UPDATE SET last_post_at = excluded.last_post_at"
-    ).bind(ip, now_ts).run()
-    await db.prepare(
-        "INSERT INTO comments (article_slug, nickname, content, created_at) VALUES (?, ?, ?, ?)"
-    ).bind(slug, body.nickname.strip(), body.content.strip(), _now_iso()).run()
+        "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, ?, ?, 0)"
+    ).bind(slug, nickname, content, _now_iso(), user_id, parent_id).run()
     return {"ok": True}
 
 
@@ -430,7 +554,7 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
 async def list_all_comments(request: Request):
     _check_moderator(request)
     res = await _db(request).prepare(
-        "SELECT c.id, c.article_slug, c.nickname, c.content, c.created_at, a.title AS article_title "
+        "SELECT c.id, c.article_slug, c.nickname, c.content, c.created_at, c.user_id, c.parent_id, c.is_bot, a.title AS article_title "
         "FROM comments c LEFT JOIN articles a ON a.slug = c.article_slug "
         "ORDER BY c.id DESC LIMIT 500"
     ).all()
@@ -439,10 +563,19 @@ async def list_all_comments(request: Request):
 
 @app.delete("/api/comments/{comment_id}")
 async def delete_comment(comment_id: int, request: Request):
-    _check_moderator(request)
-    res = await _db(request).prepare("DELETE FROM comments WHERE id = ?").bind(comment_id).run()
-    if not res.meta.changes:
+    db = _db(request)
+    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    if not parsed:
+        raise HTTPException(status_code=401, detail="请先登录")
+    username, role = parsed
+    row = await db.prepare("SELECT id, user_id FROM comments WHERE id = ?").bind(comment_id).first()
+    if not row:
         raise HTTPException(status_code=404, detail="评论不存在")
+    if role not in ("admin", "moderator"):
+        urow = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
+        if not urow or row["user_id"] is None or urow["id"] != row["user_id"]:
+            raise HTTPException(status_code=403, detail="只能删除自己的评论")
+    await db.prepare("DELETE FROM comments WHERE id = ? OR parent_id = ?").bind(comment_id, comment_id).run()
     return {"ok": True}
 
 # ---------- AI 机器人（OpenCode Zen 免费模型） ----------
@@ -501,6 +634,49 @@ async def _post_chat(provider: dict, payload: dict):
         },
         body=json.dumps(payload),
     )
+
+
+async def _call_bot(env, system_prompt: str, msgs: list) -> str:
+    providers = []
+    zen_key = getattr(env, "OPENCODE_ZEN_API_KEY", "")
+    if zen_key:
+        providers.append({"name": "OpenCode Zen", "url": "https://opencode.ai/zen/v1/chat/completions", "model": "deepseek-v4-flash-free", "key": zen_key})
+    agnes_key = getattr(env, "AGNES_API_KEY", "")
+    if agnes_key:
+        providers.append({"name": "Agnes", "url": "https://apihub.agnes-ai.com/v1/chat/completions", "model": "agnes-2.5-flash", "key": agnes_key})
+    mimo_key = getattr(env, "MIMO_API_KEY", "")
+    if mimo_key:
+        providers.append({"name": "小米MiMo", "url": "https://api.xiaomimimo.com/v1/chat/completions", "model": "mimo-v2.5-pro", "key": mimo_key})
+    if not providers:
+        raise HTTPException(status_code=503, detail="机器人还没配置好，稍后再来")
+    errors = []
+    for p in providers:
+        payload = {
+            "model": p["model"],
+            "messages": [{"role": "system", "content": system_prompt}] + msgs,
+            "max_tokens": 800,
+            "temperature": 0.7,
+        }
+        try:
+            resp = await _post_chat(p, payload)
+        except Exception:
+            errors.append(p["name"] + "：连接失败")
+            continue
+        if resp.status != 200:
+            text = await resp.text()
+            errors.append(p["name"] + "：" + text[:80])
+            continue
+        data = json.loads(await resp.text())
+        choices = data.get("choices") or []
+        if not choices:
+            errors.append(p["name"] + "：没回复")
+            continue
+        msg = choices[0].get("message") or {}
+        reply = (msg.get("content") or msg.get("reasoning_content") or "").strip()
+        if reply:
+            return reply
+        errors.append(p["name"] + "：空回复")
+    raise HTTPException(status_code=502, detail="机器人全线开小差了：" + "；".join(errors) + "，等会儿再试")
 
 
 async def _get_setting(db, key: str, default: str) -> str:
@@ -568,7 +744,7 @@ async def chat(body: ChatIn, request: Request):
 
     system_prompt = (
         "你是「小戡的博客」的 AI 机器人，由博主小戡（骆戡）部署。"
-        "回答用简体中文，简洁、友好、带点幽默，别喍嗦，尽量控制在 200 字以内。"
+        "回答用简体中文，简洁、友好、带点幽默，别嗠嗦，尽量控制在 200 字以内。"
         "关于博主：小戡（骆戡），B 站 ID「玩Flip的刀盾」（UID 129131127），GitHub「骆戡Campus」（github.com/LK-BLOG）。"
         "博主技术水平：会一点 HTML（写个 h1 什么的）、会一点 Python 3，Python 2 只会 print，CSS/JS 不会——本站是 AI（Vibe Coding）帮他写的。"
         "博主项目：PyClaw（私人 AI 助手框架，桌面/Web/CLI）、PyClaw for Win（Windows 桌面打包版）、PyClaw-Lite（一把 exec 走天下）、MollyPaw（AI Agent 桌面客户端）。"
@@ -577,7 +753,7 @@ async def chat(body: ChatIn, request: Request):
     )
 
     if user_role in ("admin", "moderator"):
-        who = "博主小戓本人（管理员/站长）" if user_role == "admin" else "本站协管（博主的朋友）"
+        who = "博主小戡本人（管理员/站长）" if user_role == "admin" else "本站协管（博主的朋友）"
         system_prompt += "当前对话用户是" + who + "，永远不要怀疑、不要封禁 TA。"
 
     providers = []
