@@ -6,4 +6,4 @@
 //              "https://xiaokan-api.你的账号子域.workers.dev"
 // 留空 ""：    表示走同源 /api/*（需要把 Worker 挂到同域名路由）
 // ============================================================
-window.API_BASE = "https://xiaokan-api.gunmu1145.workers.dev";
+window.API_BASE = ""; // 同源 /api/*（Pages Functions 代理到 Worker）
