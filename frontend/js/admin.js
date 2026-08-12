@@ -41,6 +41,11 @@
     $("mode-md").addEventListener("click", function () { setEditorMode("md"); });
   }
 
+  function mdToHtml(md) {
+    var html = mdToHtml(md);
+    return window.DOMPurify ? DOMPurify.sanitize(html) : html;
+  }
+
   function setEditorMode(mode) {
     editorMode = mode;
     var isRich = mode === "rich";
@@ -49,7 +54,7 @@
     $("mode-rich").classList.toggle("primary", isRich);
     $("mode-md").classList.toggle("primary", !isRich);
     if (isRich && quill) {
-      quill.clipboard.dangerouslyPasteHTML(marked.parse(getMarkdown() || ""));
+      quill.clipboard.dangerouslyPasteHTML(mdToHtml(getMarkdown()));
     } else {
       $("e-content").value = getMarkdown();
     }
@@ -67,7 +72,7 @@
     $("e-content").value = md || "";
     if (quill) quill.setContents([]);
     if (quill && editorMode === "rich") {
-      quill.clipboard.dangerouslyPasteHTML(marked.parse(md || ""));
+      quill.clipboard.dangerouslyPasteHTML(mdToHtml(md));
     }
   }
   function init() {
@@ -129,7 +134,7 @@
     $("preview-toggle").addEventListener("click", function () {
       var pv = $("e-preview");
       if (pv.classList.contains("hidden")) {
-        pv.innerHTML = marked.parse(getMarkdown() || "");
+        pv.innerHTML = mdToHtml(getMarkdown());
         pv.classList.remove("hidden");
       } else {
         pv.classList.add("hidden");

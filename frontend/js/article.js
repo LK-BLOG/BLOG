@@ -121,7 +121,7 @@
         '<div class="win-body">' +
           '<p class="post-meta">发布 ' + esc(Blog.fmtDate(a.created_at)) +
           (a.updated_at && a.updated_at !== a.created_at ? " · 更新 " + esc(Blog.fmtDate(a.updated_at)) : "") + "</p>" +
-          '<div class="markdown-body">' + marked.parse(a.content_md) + "</div>" +
+          '<div class="markdown-body">' + (window.DOMPurify ? DOMPurify.sanitize(marked.parse(a.content_md)) : marked.parse(a.content_md)) + "</div>" +
         "</div>";
       commentsBox.classList.remove("hidden");
       renderAuth();
