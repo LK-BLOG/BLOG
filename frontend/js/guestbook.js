@@ -20,9 +20,11 @@
       var dn = Blog.getDisplayName() || Blog.getUsername() || "友人";
       authHint.innerHTML = '<p class="muted px12">以 <b>' + esc(dn) + "</b> 留言（不需填昵称）</p>";
       nickRow.style.display = "none";
+      if (nickInput) { nickInput.disabled = true; nickInput.required = false; }
     } else {
       authHint.innerHTML = '<p class="muted px12">游客可以填昵称留言；登录后自动用你的名字。</p>';
       nickRow.style.display = "";
+      if (nickInput) { nickInput.disabled = false; nickInput.required = true; }
     }
   }
 
@@ -85,6 +87,10 @@
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     showAlert("");
+    if (Blog.isAuthed() && nickInput) {
+      nickInput.disabled = true;
+      nickInput.required = false;
+    }
     var content = contentInput.value.trim();
     if (!content) { showAlert("请填写内容"); return; }
     var payload = { content: content };
