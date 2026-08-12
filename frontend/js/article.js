@@ -115,7 +115,7 @@
     box.innerHTML = '<div class="win-body"><div class="alert error">缺少参数 slug=xxx</div></div>';
   } else {
     Blog.api("/api/articles/" + encodeURIComponent(slug)).then(function (a) {
-      document.title = a.title + " - 小戓的博客";
+      document.title = a.title + " - 小戡的博客";
       box.innerHTML =
         '<div class="win-title"><span class="win-label">📖 ' + esc(a.title) + '</span><span class="win-dots"><span class="dot"></span></span></div>' +
         '<div class="win-body">' +
