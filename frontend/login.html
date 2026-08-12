@@ -38,7 +38,11 @@
             <button type="submit" class="btn primary" style="width:100%">登录</button>
           </form>
 
-          <div class="login-switch">没有账号？<a id="goto-register">注册一个</a></div>
+          <div class="login-switch">没有账号？<a id="goto-register">注册一个</a> · <a id="forgot-pw">忘记密码？</a></div>
+          <div id="forgot-tip" class="hidden" style="margin-top:10px;padding:8px;border:2px inset;border-color:#808080 #fff #fff #808080;background:#fff;font-size:13px">
+            自助重置需要邮箱验证，本站没有。请联系站长在管理后台重置：
+            在留言板留言告诉你的用户名，或通过对应平台联系。
+          </div>
 
           <form id="register-form" class="hidden">
             <div class="form-row">
@@ -91,6 +95,9 @@
     }
 
     $("goto-register").addEventListener("click", function () { setMode(true); });
+    $("forgot-pw").addEventListener("click", function () {
+      $("forgot-tip").classList.toggle("hidden");
+    });
     $("goto-login").addEventListener("click", function () { setMode(false); });
 
     $("login-form").addEventListener("submit", function (e) {

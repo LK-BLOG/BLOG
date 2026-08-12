@@ -563,17 +563,39 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
     content = body.content.strip()
     mention = content[:20].lower()
     is_mention = mention.startswith("@bot") or mention.startswith("@机器人") or mention.startswith("@小戡")
-    if is_mention:
+    parent_is_bot = False
+    if parent_id:
+        pp = await db.prepare("SELECT is_bot FROM comments WHERE id = ?").bind(parent_id).first()
+        parent_is_bot = bool(pp and pp["is_bot"])
+    if is_mention or parent_is_bot:
         env = request.scope["env"]
+        # 收集回复链上下文（顶层到当前）
+        chain = []
+        cur_parent = parent_id
+        parents = []
+        while cur_parent:
+            prow = await db.prepare(
+                "SELECT id, parent_id, content, is_bot FROM comments WHERE id = ? AND article_slug = ?"
+            ).bind(cur_parent, slug).first()
+            if not prow:
+                break
+            parents.append(prow)
+            cur_parent = prow["parent_id"]
+        for prow in reversed(parents):
+            ctext = str(prow["content"])[:300]
+            if ctext.strip():
+                chain.append({"role": "assistant" if prow["is_bot"] else "user", "content": ctext})
+        chain.append({"role": "user", "content": content[:500]})
         base = (
             "你是「小戡的博客」的 AI 机器人，由博主小戡（骆戡）部署。"
             "回答用简体中文，简洁、友好、带点幽默，别嗠嗦，尽量控制在 200 字以内。"
             "博主是小戡（骆戡），本站是 Vibe Coding 产物。"
         )
-        prompt = base + "用户在文章评论区 @ 了你。当前文章《%s》：\n%s\n请根据上文回答用户的问题；如果用户要求分析文章，就基于文章内容分析；其他问题正常回答。" % (
-            article["title"], str(article["content_md"])[:2000]
-        )
-        reply = await _call_bot(env, prompt, [{"role": "user", "content": content}])
+        prompt = base + (
+            "用户在文章评论区说话，下面是当前文章和这段对话的上下文（用户与机器人）。"
+            "当前文章《%s》：\n%s\n请结合上下文回答用户最后一条消息；如果用户要求分析文章，就基于文章内容分析。"
+        ) % (article["title"], str(article["content_md"])[:2000])
+        reply = await _call_bot(env, prompt, chain[-10:])
         r1 = await db.prepare(
             "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, ?, ?, 0)"
         ).bind(slug, nickname, content, _now_iso(), user_id, parent_id).run()
@@ -587,6 +609,7 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
                 "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, NULL, ?, 1)"
             ).bind(slug, "🤖 小戡的机器人", reply, _now_iso(), parent_id).run()
         return {"ok": True, "bot_reply": reply}
+
 
     await db.prepare(
         "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, ?, ?, 0)"

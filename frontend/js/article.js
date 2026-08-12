@@ -38,14 +38,15 @@
   function esc(s) { return Blog.escapeHtml(s); }
 
   function renderComments(list) {
+    var depth = {};
+    list.forEach(function (m) { depth[m.id] = m.parent_id ? (depth[m.parent_id] || 0) + 1 : 0; });
     var html = "";
     list.forEach(function (m) {
-      var style = m.parent_id ? "margin-left:28px;" : "";
+      var d = Math.min(depth[m.id] || 0, 5);
+      var style = d ? "margin-left:" + (d * 28) + "px;" : "";
       var nickCls = m.is_bot ? 'style="color:#008080;font-weight:bold"' : "";
       var ops = "";
-      if (!m.is_bot) {
-        ops += "<button class='btn' data-reply='" + m.id + "' data-nick='" + esc(m.nickname) + "'>回复</button> ";
-      }
+      ops += "<button class='btn' data-reply='" + m.id + "' data-nick='" + esc(m.nickname) + "'>回复</button> ";
       if (m.is_mine) {
         ops += "<button class='btn danger' data-del='" + m.id + "'>删除</button>";
       } else if (!m.is_bot) {
