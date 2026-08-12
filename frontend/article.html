@@ -24,6 +24,24 @@
     <section class="section">
       <p class="mb8"><a href="articles.html">← 返回文章列表</a></p>
       <div id="post" class="win"><div class="win-body"><p class="muted">加载中…</p></div></div>
+      <div id="comments" class="win mt16 hidden">
+        <div class="win-title"><span class="win-label">💬 评论区</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+        <div class="win-body">
+          <div id="cmt-alert"></div>
+          <form id="cmt-form" class="mb16">
+            <div class="form-row">
+              <label for="cmt-nickname">昵称</label>
+              <input class="field" type="text" id="cmt-nickname" maxlength="30" placeholder="你的名字（必填）" required>
+            </div>
+            <div class="form-row">
+              <label for="cmt-content">内容</label>
+              <textarea class="field" id="cmt-content" maxlength="500" placeholder="说点什么…（必填，500 字以内）" required></textarea>
+            </div>
+            <button type="submit" class="btn primary">发表评论</button>
+          </form>
+          <div id="cmt-list"></div>
+        </div>
+      </div>
     </section>
   </main>
   <footer class="footer">

@@ -126,11 +126,12 @@
     document.querySelectorAll("[data-tab]").forEach(function (b) {
       b.classList.toggle("primary", b.dataset.tab === tab);
     });
-    ["articles", "messages", "editor"].forEach(function (t) {
+    ["articles", "messages", "comments", "editor"].forEach(function (t) {
       $("tab-" + t).classList.toggle("hidden", t !== tab);
     });
     if (tab === "articles") loadArticles();
     if (tab === "messages") loadMessages();
+    if (tab === "comments") loadComments();
   }
 
   /* ---------- 文章管理 ---------- */
@@ -209,6 +210,39 @@
       switchTab("articles");
     }).catch(function (err) {
       showAlert("editor-alert", "保存失败：" + err.message);
+    });
+  }
+
+  /* ---------- 评论管理 ---------- */
+  function loadComments() {
+    var box = $("comments-manage");
+    box.innerHTML = '<p class="muted px12">加载中…</p>';
+    Blog.api("/api/comments").then(function (data) {
+      var list = (data && data.comments) || [];
+      if (!list.length) {
+        box.innerHTML = '<p class="muted px12">还没有评论。</p>';
+        return;
+      }
+      var html = '<table><tr><th>文章</th><th style="width:110px">昵称</th><th>内容</th><th style="width:130px">时间</th><th style="width:70px">操作</th></tr>';
+      list.forEach(function (m) {
+        html += "<tr><td>" + (m.article_title ? Blog.escapeHtml(m.article_title) : Blog.escapeHtml(m.article_slug)) + "</td>" +
+          "<td>" + Blog.escapeHtml(m.nickname) + "</td>" +
+          "<td>" + Blog.escapeHtml(m.content) + "</td>" +
+          "<td class='nowrap'>" + Blog.escapeHtml(Blog.fmtDate(m.created_at)) + "</td>" +
+          "<td><button class='btn danger' data-del='" + m.id + "'>删除</button></td></tr>";
+      });
+      html += "</table>";
+      box.innerHTML = html;
+      box.querySelectorAll("[data-del]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          if (!confirm("确定删除这条评论？")) return;
+          Blog.api("/api/comments/" + encodeURIComponent(b.dataset.del), { method: "DELETE" })
+            .then(function () { loadComments(); })
+            .catch(function (err) { alert("删除失败：" + err.message); });
+        });
+      });
+    }).catch(function (err) {
+      box.innerHTML = '<div class="alert error">加载失败：' + Blog.escapeHtml(err.message) + "</div>";
     });
   }
 

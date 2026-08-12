@@ -192,6 +192,57 @@ async def delete_message(message_id: int, request: Request):
     return {"ok": True}
 
 
+
+# ---------- 文章评论 ----------
+
+@app.get("/api/articles/{slug}/comments")
+async def list_comments(slug: str, request: Request):
+    res = await _db(request).prepare(
+        "SELECT id, nickname, content, created_at FROM comments "
+        "WHERE article_slug = ? ORDER BY id ASC LIMIT 500"
+    ).bind(slug).all()
+    return {"comments": res.results}
+
+
+@app.post("/api/articles/{slug}/comments")
+async def create_comment(slug: str, body: MessageIn, request: Request):
+    db = _db(request)
+    article = await db.prepare("SELECT id FROM articles WHERE slug = ?").bind(slug).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="文章不存在")
+    ip = (request.client.host if request.client else None) or request.headers.get("cf-connecting-ip") or "unknown"
+    now_ts = int(time.time())
+    row = await db.prepare("SELECT last_post_at FROM comment_rate_limits WHERE ip = ?").bind(ip).first()
+    if row and (now_ts - int(row["last_post_at"])) < RATE_LIMIT_SECONDS:
+        raise HTTPException(status_code=429, detail="评论太频繁，请 60 秒后再试")
+    await db.prepare(
+        "INSERT INTO comment_rate_limits (ip, last_post_at) VALUES (?, ?) "
+        "ON CONFLICT(ip) DO UPDATE SET last_post_at = excluded.last_post_at"
+    ).bind(ip, now_ts).run()
+    await db.prepare(
+        "INSERT INTO comments (article_slug, nickname, content, created_at) VALUES (?, ?, ?, ?)"
+    ).bind(slug, body.nickname.strip(), body.content.strip(), _now_iso()).run()
+    return {"ok": True}
+
+
+@app.get("/api/comments")
+async def list_all_comments(request: Request):
+    _check_admin(request)
+    res = await _db(request).prepare(
+        "SELECT c.id, c.article_slug, c.nickname, c.content, c.created_at, a.title AS article_title "
+        "FROM comments c LEFT JOIN articles a ON a.slug = c.article_slug "
+        "ORDER BY c.id DESC LIMIT 500"
+    ).all()
+    return {"comments": res.results}
+
+
+@app.delete("/api/comments/{comment_id}")
+async def delete_comment(comment_id: int, request: Request):
+    _check_admin(request)
+    res = await _db(request).prepare("DELETE FROM comments WHERE id = ?").bind(comment_id).run()
+    if not res.meta.changes:
+        raise HTTPException(status_code=404, detail="评论不存在")
+    return {"ok": True}
 # ---------- Worker 入口 ----------
 
 class Default(WorkerEntrypoint):

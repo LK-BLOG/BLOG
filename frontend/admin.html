@@ -43,6 +43,7 @@
         <div class="mb16" style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn primary" data-tab="articles">文章管理</button>
           <button class="btn" data-tab="messages">留言管理</button>
+          <button class="btn" data-tab="comments">评论管理</button>
           <button class="btn" data-tab="editor" id="new-article-btn">＋ 写新文章</button>
           <button class="btn danger" id="logout-btn">退出登录</button>
         </div>
@@ -53,6 +54,10 @@
 
         <div id="tab-messages" class="tab-pane hidden">
           <div class="win flat mb16" id="messages-manage"><p class="muted px12">加载中…</p></div>
+        </div>
+
+        <div id="tab-comments" class="tab-pane hidden">
+          <div class="win flat mb16" id="comments-manage"><p class="muted px12">加载中…</p></div>
         </div>
 
         <div id="tab-editor" class="tab-pane hidden">
