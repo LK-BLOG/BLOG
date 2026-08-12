@@ -103,7 +103,11 @@
         loadMessages();
       })
       .catch(function (err) {
-        if (err.status === 429) showAlert("留言太频繁，请 60 秒后再试");
+        if (err.status === 401) {
+          Blog.logout();
+          showAlert("登录已过期，请重新登录后再留言");
+          renderAuth();
+        } else if (err.status === 429) showAlert("留言太频繁，请 60 秒后再试");
         else showAlert("留言失败：" + err.message);
       })
       .finally(function () { btn.disabled = false; });

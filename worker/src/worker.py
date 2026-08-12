@@ -407,7 +407,10 @@ async def create_message(body: MessageIn, request: Request):
     db = _db(request)
     ip = _client_ip(request)
     now_ts = int(time.time())
-    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    auth_header = request.headers.get("authorization", "")
+    parsed = _parse_token(auth_header, request.scope["env"])
+    if auth_header.strip() and not parsed:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
     is_privileged = False
     user_id = None
     nickname = None
