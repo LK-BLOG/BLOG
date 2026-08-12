@@ -64,7 +64,8 @@
       var closeBtn0 = $("chat-close");
       if (title0) title0.insertBefore(adminBtn, closeBtn0 || null);
     }
-    if (adminBtn) adminBtn.style.display = (authed && Blog.getRole() === "admin") ? "" : "none";
+    var gRole = Blog.getRole();
+    if (adminBtn) adminBtn.style.display = (authed && (gRole === "admin" || gRole === "moderator")) ? "" : "none";
 
     var logoutBtn = $("chat-logout");
     if (!logoutBtn && win) {

@@ -72,7 +72,8 @@
   }
   function init() {
     if (Blog.isAuthed()) {
-      if (Blog.getRole() === "admin") { enterPanel(); return; }
+      var r = Blog.getRole();
+      if (r === "admin" || r === "moderator") { enterPanel(); return; }
       Blog.logout();
     }
     $("login-form").addEventListener("submit", function (e) {
@@ -81,7 +82,7 @@
       btn.disabled = true;
       Blog.api("/api/login", { method: "POST", body: { username: $("username").value.trim(), password: $("password").value } })
         .then(function (data) {
-          if (data.role !== "admin") { throw new Error("\u8be5\u8d26\u53f7\u4e0d\u662f\u7ba1\u7406\u5458"); }
+          if (data.role !== "admin" && data.role !== "moderator") { throw new Error("\u8be5\u8d26\u53f7\u6ca1\u6709\u7ba1\u7406\u6743\u9650"); }
           Blog.setToken(data.token);
           Blog.setUser(data.username, data.role);
           $("password").value = "";
@@ -99,8 +100,17 @@
     panelView.classList.remove("hidden");
     bindPanelEvents();
     bindBotForm();
-    switchTab("articles");
-    loadArticles();
+    var isMod = Blog.getRole() === "moderator";
+    ["tab-articles", "tab-users", "tab-bot", "tab-editor", "new-article-btn"].forEach(function (id) {
+      var el = $(id);
+      if (el) el.style.display = isMod ? "none" : "";
+    });
+    if (isMod) {
+      switchTab("messages");
+    } else {
+      switchTab("articles");
+      loadArticles();
+    }
     loadMessages();
   }
 
@@ -269,17 +279,29 @@
         var status = u.banned ? '已封禁' : (u.username === "admin" ? '管理员' : '正常');
         var ops = '';
         if (u.username !== "admin") {
+          ops += "<button class='btn " + (u.role === "moderator" ? "primary" : "") + "' data-role='" + u.username + "' data-set='moderator'>协管</button> ";
+          ops += "<button class='btn " + (u.role === "admin" ? "primary" : "") + "' data-role='" + u.username + "' data-set='admin'>管理员</button> ";
+          ops += "<button class='btn " + (u.role === "user" ? "primary" : "") + "' data-role='" + u.username + "' data-set='user'>普通</button> ";
           ops += "<button class='btn " + (u.banned ? "" : "danger") + "' data-ban='" + u.username + "' data-state='" + (u.banned ? "0" : "1") + "'>" + (u.banned ? "解封" : "封禁") + "</button> ";
           ops += "<button class='btn danger' data-del='" + u.username + "'>删除</button>";
         } else {
           ops = '<span class="muted px12">不可操作</span>';
         }
         html += "<tr><td>" + u.id + "</td><td>" + Blog.escapeHtml(u.username) + "</td><td>" +
-          (u.role === "admin" ? "管理员" : "普通") + "</td><td>" + status + "</td><td class='nowrap'>" +
+          (u.role === "admin" ? "管理员" : (u.role === "moderator" ? "协管" : "普通")) + "</td><td>" + status + "</td><td class='nowrap'>" +
           Blog.escapeHtml(Blog.fmtDate(u.created_at)) + "</td><td>" + ops + "</td></tr>";
       });
       html += "</table>";
       box.innerHTML = html;
+      box.querySelectorAll("[data-role]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var roleName = b.dataset.set === "admin" ? "管理员" : (b.dataset.set === "moderator" ? "协管" : "普通用户");
+          if (!confirm("确定把 " + b.dataset.role + " 设为" + roleName + "？")) return;
+          Blog.api("/api/users/" + encodeURIComponent(b.dataset.role) + "/role", { method: "PUT", body: { role: b.dataset.set } })
+            .then(function () { loadUsers(); })
+            .catch(function (err) { alert("设置失败：" + err.message); });
+        });
+      });
       box.querySelectorAll("[data-ban]").forEach(function (b) {
         b.addEventListener("click", function () {
           var banned = b.dataset.state === "1";
