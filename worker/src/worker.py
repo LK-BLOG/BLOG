@@ -67,16 +67,15 @@ def _verify_password(password: str, stored: str) -> bool:
         return False
 
 
-def _make_token(username: str, role: str, env) -> str:
+TOKEN_TTL_DAYS = 30
+
+
+def _make_token(username: str, role: str, env, ttl_days: int = TOKEN_TTL_DAYS) -> str:
     secret = getattr(env, "ADMIN_PASSWORD", "") or "xiaokan-default-secret"
-    payload = base64.urlsafe_b64encode(
-        ("%s|%s" % (username, role)).encode("utf-8")
-    ).decode("ascii").rstrip("=")
-    sig = hmac.new(
-        secret.encode("utf-8"),
-        ("%s|%s" % (username, role)).encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
+    exp = int(time.time()) + ttl_days * 86400
+    raw = "%s|%s|%d" % (username, role, exp)
+    payload = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+    sig = hmac.new(secret.encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()
     return payload + "." + sig
 
 
@@ -89,12 +88,22 @@ def _parse_token(auth: str, env):
     payload_b64, sig = auth.rsplit(".", 1)
     try:
         payload = base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4)).decode("utf-8")
-        username, role = payload.split("|", 1)
+        parts = payload.split("|")
+        if len(parts) != 3:
+            return None
+        username, role, exp = parts[0], parts[1], int(parts[2])
     except Exception:
         return None
     if role not in ("admin", "user") or not username:
         return None
-    expected = _make_token(username, role, env).rsplit(".", 1)[1]
+    if exp <= int(time.time()):
+        return None
+    raw = "%s|%s|%d" % (username, role, exp)
+    expected = hmac.new(
+        (getattr(env, "ADMIN_PASSWORD", "") or "xiaokan-default-secret").encode("utf-8"),
+        raw.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
     if not hmac.compare_digest(sig, expected):
         return None
     return (username, role)
@@ -136,6 +145,11 @@ class ChatIn(BaseModel):
 
 class SettingsIn(BaseModel):
     chat_daily_limit: int = Field(ge=1, le=100000)
+    register_daily_limit: int | None = Field(default=None, ge=1, le=1000)
+
+
+class UserBanIn(BaseModel):
+    banned: bool
 
 class MessageIn(BaseModel):
     nickname: str = Field(min_length=1, max_length=30)
@@ -205,8 +219,10 @@ async def login(body: LoginIn, request: Request):
         ok = hmac.compare_digest(body.password, getattr(env, "ADMIN_PASSWORD", ""))
     elif USERNAME_RE.match(username):
         row = await db.prepare(
-            "SELECT password_hash, role FROM users WHERE username = ?"
+            "SELECT password_hash, role, banned FROM users WHERE username = ?"
         ).bind(username).first()
+        if row and row["banned"]:
+            raise HTTPException(status_code=403, detail="账号已被封禁")
         ok = bool(row) and _verify_password(body.password, row["password_hash"])
         if ok:
             await _clear_login_fails(db, ip, username)
@@ -233,6 +249,20 @@ async def register(body: RegisterIn, request: Request):
         raise HTTPException(status_code=409, detail="用户名已被占用")
     ip = (request.client.host if request.client else None) or request.headers.get("cf-connecting-ip") or "unknown"
     now_ts = int(time.time())
+    today = _today_str()
+    limit_raw = await _get_setting(db, "register_daily_limit", "3")
+    try:
+        reg_limit = int(limit_raw)
+    except (TypeError, ValueError):
+        reg_limit = 3
+    if reg_limit < 1:
+        reg_limit = 3
+    daily = await db.prepare(
+        "SELECT count FROM register_daily_limits WHERE ip = ? AND date = ?"
+    ).bind(ip, today).first()
+    used = int(daily["count"]) if daily else 0
+    if used >= reg_limit:
+        raise HTTPException(status_code=429, detail="今天这个 IP 的注册名额用完了（%d 个），明天再来吧" % reg_limit)
     row = await db.prepare("SELECT last_post_at FROM register_rate_limits WHERE ip = ?").bind(ip).first()
     if row and (now_ts - int(row["last_post_at"])) < RATE_LIMIT_SECONDS:
         raise HTTPException(status_code=429, detail="注册太频繁，请 60 秒后再试")
@@ -240,6 +270,11 @@ async def register(body: RegisterIn, request: Request):
         "INSERT INTO register_rate_limits (ip, last_post_at) VALUES (?, ?) "
         "ON CONFLICT(ip) DO UPDATE SET last_post_at = excluded.last_post_at"
     ).bind(ip, now_ts).run()
+    await db.prepare(
+        "INSERT INTO register_daily_limits (ip, date, count) VALUES (?, ?, 1) "
+        "ON CONFLICT(ip) DO UPDATE SET count = CASE WHEN register_daily_limits.date = excluded.date "
+        "THEN register_daily_limits.count + 1 ELSE 1 END, date = excluded.date"
+    ).bind(ip, today).run()
     await db.prepare(
         "INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, 'user', ?)"
     ).bind(username, _hash_password(body.password), _now_iso()).run()
@@ -421,9 +456,11 @@ async def chat(body: ChatIn, request: Request):
 
     # 管理员无限使用；普通用户按账号限流（60 秒最多 10 次 + 每日上限）
     if user_role != "admin":
-        user = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
+        user = await db.prepare("SELECT id, banned FROM users WHERE username = ?").bind(username).first()
         if not user:
             raise HTTPException(status_code=401, detail="账号不存在，请重新登录")
+        if user["banned"]:
+            raise HTTPException(status_code=403, detail="账号已被封禁")
         user_id = user["id"]
 
         row = await db.prepare("SELECT window_start, count FROM user_chat_rate_limits WHERE user_id = ?").bind(user_id).first()
@@ -540,22 +577,74 @@ async def chat(body: ChatIn, request: Request):
 @app.get("/api/settings")
 async def get_settings(request: Request):
     _check_admin(request)
-    raw = await _get_setting(_db(request), "chat_daily_limit", "20")
+    db = _db(request)
+    raw = await _get_setting(db, "chat_daily_limit", "20")
     try:
-        val = int(raw)
+        chat = int(raw)
     except (TypeError, ValueError):
-        val = 20
-    return {"chat_daily_limit": val}
+        chat = 20
+    raw2 = await _get_setting(db, "register_daily_limit", "3")
+    try:
+        reg = int(raw2)
+    except (TypeError, ValueError):
+        reg = 3
+    return {"chat_daily_limit": chat, "register_daily_limit": reg}
 
 
 @app.put("/api/settings")
 async def put_settings(body: SettingsIn, request: Request):
     _check_admin(request)
-    await _db(request).prepare(
+    db = _db(request)
+    await db.prepare(
         "INSERT INTO settings (key, value) VALUES ('chat_daily_limit', ?) "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     ).bind(str(body.chat_daily_limit)).run()
-    return {"ok": True, "chat_daily_limit": body.chat_daily_limit}
+    if body.register_daily_limit is not None:
+        await db.prepare(
+            "INSERT INTO settings (key, value) VALUES ('register_daily_limit', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        ).bind(str(body.register_daily_limit)).run()
+    return {"ok": True, "chat_daily_limit": body.chat_daily_limit, "register_daily_limit": body.register_daily_limit}
+
+
+# ---------- 用户管理（admin） ----------
+
+@app.get("/api/users")
+async def list_users(request: Request):
+    _check_admin(request)
+    res = await _db(request).prepare(
+        "SELECT id, username, role, banned, created_at FROM users ORDER BY id ASC"
+    ).all()
+    return {"users": res.results}
+
+
+@app.put("/api/users/{username}")
+async def ban_user(username: str, body: UserBanIn, request: Request):
+    _check_admin(request)
+    if username == "admin":
+        raise HTTPException(status_code=400, detail="不能操作管理员账号")
+    db = _db(request)
+    row = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    await db.prepare("UPDATE users SET banned = ? WHERE username = ?").bind(1 if body.banned else 0, username).run()
+    return {"ok": True, "username": username, "banned": body.banned}
+
+
+@app.delete("/api/users/{username}")
+async def delete_user(username: str, request: Request):
+    _check_admin(request)
+    if username == "admin":
+        raise HTTPException(status_code=400, detail="不能删除管理员账号")
+    db = _db(request)
+    row = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    uid = row["id"]
+    await db.prepare("DELETE FROM users WHERE id = ?").bind(uid).run()
+    await db.prepare("DELETE FROM user_chat_rate_limits WHERE user_id = ?").bind(uid).run()
+    await db.prepare("DELETE FROM user_chat_daily_usage WHERE user_id = ?").bind(uid).run()
+    return {"ok": True, "username": username}
 # ---------- Worker 入口 ----------
 
 class Default(WorkerEntrypoint):

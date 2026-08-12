@@ -132,12 +132,13 @@
     document.querySelectorAll("[data-tab]").forEach(function (b) {
       b.classList.toggle("primary", b.dataset.tab === tab);
     });
-    ["articles", "messages", "comments", "bot", "editor"].forEach(function (t) {
+    ["articles", "messages", "comments", "users", "bot", "editor"].forEach(function (t) {
       $("tab-" + t).classList.toggle("hidden", t !== tab);
     });
     if (tab === "articles") loadArticles();
     if (tab === "messages") loadMessages();
     if (tab === "comments") loadComments();
+    if (tab === "users") loadUsers();
     if (tab === "bot") loadBotSettings();
   }
 
@@ -253,11 +254,60 @@
     });
   }
 
+  /* ---------- 用户管理 ---------- */
+  function loadUsers() {
+    var box = $("users-manage");
+    box.innerHTML = '<p class="muted px12">加载中…</p>';
+    Blog.api("/api/users").then(function (data) {
+      var list = (data && data.users) || [];
+      if (!list.length) {
+        box.innerHTML = '<p class="muted px12">还没有用户。</p>';
+        return;
+      }
+      var html = '<table><tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th style="width:130px">注册时间</th><th style="width:150px">操作</th></tr>';
+      list.forEach(function (u) {
+        var status = u.banned ? '已封禁' : (u.username === "admin" ? '管理员' : '正常');
+        var ops = '';
+        if (u.username !== "admin") {
+          ops += "<button class='btn " + (u.banned ? "" : "danger") + "' data-ban='" + u.username + "' data-state='" + (u.banned ? "0" : "1") + "'>" + (u.banned ? "解封" : "封禁") + "</button> ";
+          ops += "<button class='btn danger' data-del='" + u.username + "'>删除</button>";
+        } else {
+          ops = '<span class="muted px12">不可操作</span>';
+        }
+        html += "<tr><td>" + u.id + "</td><td>" + Blog.escapeHtml(u.username) + "</td><td>" +
+          (u.role === "admin" ? "管理员" : "普通") + "</td><td>" + status + "</td><td class='nowrap'>" +
+          Blog.escapeHtml(Blog.fmtDate(u.created_at)) + "</td><td>" + ops + "</td></tr>";
+      });
+      html += "</table>";
+      box.innerHTML = html;
+      box.querySelectorAll("[data-ban]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var banned = b.dataset.state === "1";
+          if (!confirm((banned ? "确定封禁 " : "确定解封 ") + b.dataset.ban + "？")) return;
+          Blog.api("/api/users/" + encodeURIComponent(b.dataset.ban), { method: "PUT", body: { banned: banned } })
+            .then(function () { loadUsers(); })
+            .catch(function (err) { alert("操作失败：" + err.message); });
+        });
+      });
+      box.querySelectorAll("[data-del]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          if (!confirm("确定删除用户 " + b.dataset.del + "？此操作不可恢复！")) return;
+          Blog.api("/api/users/" + encodeURIComponent(b.dataset.del), { method: "DELETE" })
+            .then(function () { loadUsers(); })
+            .catch(function (err) { alert("删除失败：" + err.message); });
+        });
+      });
+    }).catch(function (err) {
+      box.innerHTML = '<div class="alert error">加载失败：' + Blog.escapeHtml(err.message) + "</div>";
+    });
+  }
+
   /* ---------- 机器人设置 ---------- */
   function loadBotSettings() {
-    var box = $("bot-limit");
+    var box = $("bot-limit"), reg = $("reg-limit");
     Blog.api("/api/settings").then(function (data) {
       box.value = data.chat_daily_limit;
+      if (reg) reg.value = data.register_daily_limit;
     }).catch(function (err) {
       $("bot-alert").innerHTML = '<div class="alert error">加载设置失败：' + Blog.escapeHtml(err.message) + "</div>";
     });
@@ -270,9 +320,16 @@
       e.preventDefault();
       var val = parseInt($("bot-limit").value, 10);
       if (!val || val < 1) { $("bot-alert").innerHTML = '<div class="alert error">请输入大于 0 的数字</div>'; return; }
-      Blog.api("/api/settings", { method: "PUT", body: { chat_daily_limit: val } })
+      var payload = { chat_daily_limit: val };
+      var regInput = $("reg-limit");
+      if (regInput) {
+        var regVal = parseInt(regInput.value, 10);
+        if (!regVal || regVal < 1) { $("bot-alert").innerHTML = '<div class="alert error">每 IP 注册上限请填大于 0 的数字</div>'; return; }
+        payload.register_daily_limit = regVal;
+      }
+      Blog.api("/api/settings", { method: "PUT", body: payload })
         .then(function () {
-          $("bot-alert").innerHTML = '<div class="alert ok">保存成功！每日上限 = ' + val + " 轮</div>";
+          $("bot-alert").innerHTML = '<div class="alert ok">保存成功！每日对话上限 = ' + val + " 轮</div>";
         })
         .catch(function (err) {
           $("bot-alert").innerHTML = '<div class="alert error">保存失败：' + Blog.escapeHtml(err.message) + "</div>";
