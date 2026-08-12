@@ -30,6 +30,10 @@
           <div id="login-alert"></div>
           <form id="login-form">
             <div class="form-row">
+              <label for="username">用户名</label>
+              <input class="field" type="text" id="username" value="admin" autocomplete="username" required>
+            </div>
+            <div class="form-row">
               <label for="password">密码</label>
               <input class="field" type="password" id="password" autocomplete="current-password" required>
             </div>
@@ -68,9 +72,9 @@
               <div id="bot-alert"></div>
               <form id="bot-form">
                 <div class="form-row">
-                  <label for="bot-limit">每 IP 每日对话上限（轮）</label>
+                  <label for="bot-limit">每账号每日对话上限（轮） <span class="hint">管理员不受限</span></label>
                   <input class="field" type="number" id="bot-limit" min="1" max="100000" required>
-                  <p class="hint">默认 20 轮。调大 = 放开限制；访客多了建议调小防滥用。</p>
+                  <p class="hint">默认 20 轮，只限普通账号；管理员无限使用。调大 = 放开限制。</p>
                 </div>
                 <button type="submit" class="btn primary">保存设置</button>
               </form>

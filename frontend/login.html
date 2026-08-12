@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 - 小戡的博客</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .login-switch { text-align:center; margin-top:12px; font-size:13px; }
+    .login-switch a { color:#0000ff; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-brand"><a href="index.html"><span class="brand-icon">戡</span>小戡的博客 · 账号</a></div>
+    <div class="nav-links"><a href="index.html">返回首页</a></div>
+  </nav>
+
+  <main>
+    <section class="section" style="max-width:420px">
+      <div class="win" style="margin:40px auto">
+        <div class="win-title"><span class="win-label">👤 登录 / 注册</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+        <div class="win-body">
+          <div id="login-alert"></div>
+
+          <form id="login-form">
+            <div class="form-row">
+              <label for="username">用户名</label>
+              <input class="field" type="text" id="username" maxlength="20" autocomplete="username" required>
+              <p class="hint">注册新账号请切换到下面的“注册”。管理员请用用户名 admin 登录。</p>
+            </div>
+            <div class="form-row">
+              <label for="password">密码</label>
+              <input class="field" type="password" id="password" maxlength="72" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn primary" style="width:100%">登录</button>
+          </form>
+
+          <div class="login-switch">没有账号？<a id="goto-register">注册一个</a></div>
+
+          <form id="register-form" class="hidden">
+            <div class="form-row">
+              <label for="r-username">用户名 <span class="hint">2-20 位，字母/数字/下划线</span></label>
+              <input class="field" type="text" id="r-username" maxlength="20" autocomplete="username" required>
+            </div>
+            <div class="form-row">
+              <label for="r-password">密码 <span class="hint">6-72 位</span></label>
+              <input class="field" type="password" id="r-password" maxlength="72" autocomplete="new-password" required>
+            </div>
+            <div class="form-row">
+              <label for="r-password2">确认密码</label>
+              <input class="field" type="password" id="r-password2" maxlength="72" autocomplete="new-password" required>
+            </div>
+            <button type="submit" class="btn primary" style="width:100%">注册并登录</button>
+          </form>
+
+          <div class="login-switch hidden" id="register-switch"><a id="goto-login">已有账号？去登录</a></div>
+        </div>
+      </div>
+      <p class="muted px12" style="text-align:center">登录后才能使用 AI 机器人；每个账号每天有一定轮数，管理员不限。</p>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var $ = function (id) { return document.getElementById(id); };
+    var next = new URLSearchParams(location.search).get("next") || "index.html";
+
+    function show(msg, type) {
+      $("login-alert").innerHTML = '<div class="alert ' + (type || "error") + '">' + Blog.escapeHtml(msg) + "</div>";
+    }
+    function setMode(register) {
+      $("login-form").classList.toggle("hidden", register);
+      $("register-form").classList.toggle("hidden", !register);
+      $("goto-register").parentElement.classList.toggle("hidden", register);
+      $("register-switch").classList.toggle("hidden", !register);
+    }
+    function finish(data) {
+      Blog.setToken(data.token);
+      Blog.setUser(data.username, data.role);
+      location.href = next;
+    }
+
+    $("goto-register").addEventListener("click", function () { setMode(true); });
+    $("goto-login").addEventListener("click", function () { setMode(false); });
+
+    $("login-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var btn = this.querySelector("button");
+      btn.disabled = true;
+      Blog.api("/api/login", { method: "POST", body: { username: $("username").value.trim(), password: $("password").value } })
+        .then(finish)
+        .catch(function (err) { show(err.message || "登录失败"); })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    $("register-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var u = $("r-username").value.trim();
+      var p = $("r-password").value;
+      if (p !== $("r-password2").value) { show("两次密码不一致"); return; }
+      var btn = this.querySelector("button");
+      btn.disabled = true;
+      Blog.api("/api/register", { method: "POST", body: { username: u, password: p } })
+        .then(finish)
+        .catch(function (err) { show(err.message || "注册失败"); })
+        .finally(function () { btn.disabled = false; });
+    });
+  })();
+  </script>
+</body>
+</html>

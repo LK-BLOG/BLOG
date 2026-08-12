@@ -35,6 +35,22 @@
     try { if (t) localStorage.setItem("xiaokan_token", t); else localStorage.removeItem("xiaokan_token"); } catch (e) {}
   }
   function isAuthed() { return !!getToken(); }
+  function getUsername() {
+    try { return localStorage.getItem("xiaokan_username") || ""; } catch (e) { return ""; }
+  }
+  function getRole() {
+    try { return localStorage.getItem("xiaokan_role") || ""; } catch (e) { return ""; }
+  }
+  function setUser(username, role) {
+    try {
+      if (username) localStorage.setItem("xiaokan_username", username); else localStorage.removeItem("xiaokan_username");
+      if (role) localStorage.setItem("xiaokan_role", role); else localStorage.removeItem("xiaokan_role");
+    } catch (e) {}
+  }
+  function logout() {
+    setToken("");
+    setUser("", "");
+  }
 
   function escapeHtml(s) {
     return String(s == null ? "" : s)
@@ -51,5 +67,5 @@
       " " + p(d.getHours()) + ":" + p(d.getMinutes());
   }
 
-  window.Blog = { api: api, getToken: getToken, setToken: setToken, isAuthed: isAuthed, escapeHtml: escapeHtml, fmtDate: fmtDate };
+  window.Blog = { api: api, getToken: getToken, setToken: setToken, isAuthed: isAuthed, getUsername: getUsername, getRole: getRole, setUser: setUser, logout: logout, escapeHtml: escapeHtml, fmtDate: fmtDate };
 })();

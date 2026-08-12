@@ -71,14 +71,19 @@
     }
   }
   function init() {
-    if (Blog.isAuthed()) { enterPanel(); return; }
+    if (Blog.isAuthed()) {
+      if (Blog.getRole() === "admin") { enterPanel(); return; }
+      Blog.logout();
+    }
     $("login-form").addEventListener("submit", function (e) {
       e.preventDefault();
       var btn = this.querySelector("button");
       btn.disabled = true;
-      Blog.api("/api/login", { method: "POST", body: { password: $("password").value } })
+      Blog.api("/api/login", { method: "POST", body: { username: $("username").value.trim(), password: $("password").value } })
         .then(function (data) {
+          if (data.role !== "admin") { throw new Error("\u8be5\u8d26\u53f7\u4e0d\u662f\u7ba1\u7406\u5458"); }
           Blog.setToken(data.token);
+          Blog.setUser(data.username, data.role);
           $("password").value = "";
           enterPanel();
         })
@@ -106,7 +111,7 @@
     $("new-article-btn").addEventListener("click", function () { openEditor(null); });
     $("logout-btn").addEventListener("click", function () {
       if (!confirm("确定退出登录？")) return;
-      Blog.setToken("");
+      Blog.logout();
       location.reload();
     });
     $("editor-form").addEventListener("submit", saveArticle);
