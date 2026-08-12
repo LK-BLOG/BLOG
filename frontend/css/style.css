@@ -360,7 +360,8 @@ th { background: var(--face); }
   background: var(--face);
   border-top: 2px solid var(--hl);
   box-shadow: 0 -1px 0 var(--shadow);
-  padding: 10px 16px 12px;
+  /* 给右下角的机器人按钮留位，避免挡住管理入口 */
+  padding: 10px 16px 64px;
 }
 .ticker {
   background: #fff;
