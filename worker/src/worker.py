@@ -174,7 +174,8 @@ async def health():
 # ---------- 登录 ----------
 
 def _client_ip(request: Request) -> str:
-    return (request.client.host if request.client else None) or request.headers.get("cf-connecting-ip") or "unknown"
+    # 优先用 cf-connecting-ip（真实访客 IP）；Pages Functions 转发时 client.host 是内部地址，不能用
+    return request.headers.get("cf-connecting-ip") or (request.client.host if request.client else None) or "unknown"
 
 
 async def _login_remaining(db, ip: str, username: str) -> int:
@@ -249,7 +250,7 @@ async def register(body: RegisterIn, request: Request):
     dup = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
     if dup:
         raise HTTPException(status_code=409, detail="用户名已被占用")
-    ip = (request.client.host if request.client else None) or request.headers.get("cf-connecting-ip") or "unknown"
+    ip = _client_ip(request)
     now_ts = int(time.time())
     today = _today_str()
     limit_raw = await _get_setting(db, "register_daily_limit", "3")
@@ -351,7 +352,7 @@ async def list_messages(request: Request):
 
 @app.post("/api/messages")
 async def create_message(body: MessageIn, request: Request):
-    ip = (request.client.host if request.client else None) or request.headers.get("cf-connecting-ip") or "unknown"
+    ip = _client_ip(request)
     now_ts = int(time.time())
     db = _db(request)
 
@@ -398,7 +399,7 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
     article = await db.prepare("SELECT id FROM articles WHERE slug = ?").bind(slug).first()
     if not article:
         raise HTTPException(status_code=404, detail="文章不存在")
-    ip = (request.client.host if request.client else None) or request.headers.get("cf-connecting-ip") or "unknown"
+    ip = _client_ip(request)
     now_ts = int(time.time())
     row = await db.prepare("SELECT last_post_at FROM comment_rate_limits WHERE ip = ?").bind(ip).first()
     if row and (now_ts - int(row["last_post_at"])) < RATE_LIMIT_SECONDS:
