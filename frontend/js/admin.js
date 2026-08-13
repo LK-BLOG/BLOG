@@ -303,25 +303,28 @@
         box.innerHTML = '<p class="muted px12">还没有用户。</p>';
         return;
       }
-      var html = '<table><tr><th>ID</th><th>用户名</th><th>名称</th><th>角色</th><th>状态</th><th style="width:130px">注册时间</th><th style="width:150px">操作</th></tr>';
+      var html = '<div class="user-grid">';
       list.forEach(function (u) {
         var status = u.banned ? '已封禁' : (u.username === "admin" ? '管理员' : '正常');
+        var roleTxt = u.role === "admin" ? "管理员" : (u.role === "moderator" ? "协管" : "普通");
         var ops = '';
         if (u.username !== "admin") {
-          ops += "<button class='btn " + (u.role === "moderator" ? "primary" : "") + "' data-role='" + u.username + "' data-set='moderator'>协管</button> ";
-          ops += "<button class='btn " + (u.role === "admin" ? "primary" : "") + "' data-role='" + u.username + "' data-set='admin'>管理员</button> ";
-          ops += "<button class='btn " + (u.role === "user" ? "primary" : "") + "' data-role='" + u.username + "' data-set='user'>普通</button> ";
-          ops += "<button class='btn " + (u.banned ? "" : "danger") + "' data-ban='" + u.username + "' data-state='" + (u.banned ? "0" : "1") + "'>" + (u.banned ? "解封" : "封禁") + "</button> ";
-          ops += "<button class='btn danger' data-del='" + u.username + "'>删除</button> ";
-          ops += "<button class='btn' data-resetpw='" + u.username + "'>重置密码</button>";
+          ops += "<button class='btn btn-sm " + (u.role === "moderator" ? "primary" : "") + "' data-role='" + u.username + "' data-set='moderator'>协管</button>";
+          ops += "<button class='btn btn-sm " + (u.role === "admin" ? "primary" : "") + "' data-role='" + u.username + "' data-set='admin'>管理</button>";
+          ops += "<button class='btn btn-sm " + (u.role === "user" ? "primary" : "") + "' data-role='" + u.username + "' data-set='user'>普通</button>";
+          ops += "<button class='btn btn-sm " + (u.banned ? "" : "danger") + "' data-ban='" + u.username + "' data-state='" + (u.banned ? "0" : "1") + "'>" + (u.banned ? "解封" : "封禁") + "</button>";
+          ops += "<button class='btn btn-sm danger' data-del='" + u.username + "'>删除</button>";
+          ops += "<button class='btn btn-sm' data-resetpw='" + u.username + "'>重置</button>";
         } else {
           ops = '<span class="muted px12">不可操作</span>';
         }
-        html += "<tr><td>" + u.id + "</td><td>" + Blog.escapeHtml(u.username) + "</td><td>" + Blog.escapeHtml(u.display_name || "-") + "</td><td>" +
-          (u.role === "admin" ? "管理员" : (u.role === "moderator" ? "协管" : "普通")) + "</td><td>" + status + "</td><td class='nowrap'>" +
-          Blog.escapeHtml(Blog.fmtDate(u.created_at)) + "</td><td>" + ops + "</td></tr>";
+        html += '<div class="user-card">' +
+          '<div class="user-card-head">' + Blog.escapeHtml(u.username) + ' <span class="tag">' + roleTxt + '</span> <span class="tag ' + (u.banned ? "tag-danger" : "") + '">' + status + '</span></div>' +
+          '<div class="user-card-meta">名称：' + Blog.escapeHtml(u.display_name || "-") + " · ID " + u.id + "<br>" + Blog.escapeHtml(Blog.fmtDate(u.created_at)) + "</div>" +
+          '<div class="user-card-ops">' + ops + "</div>" +
+          "</div>";
       });
-      html += "</table>";
+      html += "</div>";
       box.innerHTML = html;
       box.querySelectorAll("[data-role]").forEach(function (b) {
         b.addEventListener("click", function () {

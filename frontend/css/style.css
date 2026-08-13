@@ -467,3 +467,33 @@ th { background: var(--face); }
 .popup-btn:active {
   border-color: var(--dark) var(--hl) var(--hl) var(--dark);
 }
+
+/* 用户管理卡片网格（优先填充宽度，满了再换行） */
+.user-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+}
+.user-card {
+  width: 280px;
+  max-width: 100%;
+  background: var(--window-bg);
+  border: 2px solid;
+  border-color: var(--hl) var(--dark) var(--dark) var(--hl);
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.user-card-head { font-weight: bold; margin-bottom: 4px; }
+.user-card-meta { color: var(--dim); font-size: 12px; margin-bottom: 6px; }
+.user-card-ops { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: normal;
+  padding: 0 5px;
+  border: 1px solid var(--shadow);
+  margin-left: 4px;
+}
+.tag-danger { border-color: #a00; color: #a00; }
+.btn-sm { font-size: 11px; padding: 1px 6px; }
