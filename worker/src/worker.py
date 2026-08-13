@@ -642,7 +642,13 @@ async def delete_comment(comment_id: int, request: Request):
         urow = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
         if not urow or row["user_id"] is None or urow["id"] != row["user_id"]:
             raise HTTPException(status_code=403, detail="只能删除自己的评论")
-    await db.prepare("DELETE FROM comments WHERE id = ? OR parent_id = ?").bind(comment_id, comment_id).run()
+    await db.prepare(
+        "WITH RECURSIVE sub AS ("
+        "SELECT id FROM comments WHERE id = ? OR parent_id = ? "
+        "UNION "
+        "SELECT c.id FROM comments c JOIN sub s ON c.parent_id = s.id"
+        ") DELETE FROM comments WHERE id IN (SELECT id FROM sub)"
+    ).bind(comment_id, comment_id).run()
     return {"ok": True}
 
 # ---------- AI 机器人（OpenCode Zen 免费模型） ----------
