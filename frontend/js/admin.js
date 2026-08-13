@@ -33,8 +33,8 @@
           ]
         }
       });
-      var Inline = Quill.import("blots/inline");
-      var PopupBtn = class extends Inline {
+      var Embed = Quill.import("blots/embed");
+      var PopupBtn = class extends Embed {
         static create(value) {
           var node = super.create();
           node.classList.add("popup-btn");
