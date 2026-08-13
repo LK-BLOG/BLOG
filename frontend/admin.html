@@ -194,6 +194,38 @@
         </div>
       </div>
     </section>
+
+  <div id="popup-config" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center">
+    <div class="win" style="width:440px;max-width:92vw">
+      <div class="win-title"><span class="win-label">◎ 互动按钮设置</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+      <div class="win-body">
+        <div class="form-row">
+          <label for="pb-text">按钮文字 *</label>
+          <input class="field" type="text" id="pb-text" maxlength="30" placeholder="如：去看看">
+        </div>
+        <div class="form-row">
+          <label>按钮行为</label>
+          <div style="display:flex;gap:14px">
+            <label style="font-weight:normal"><input type="radio" name="pb-type" value="msg" checked> 弹窗内容</label>
+            <label style="font-weight:normal"><input type="radio" name="pb-type" value="url"> 跳转链接</label>
+          </div>
+        </div>
+        <div class="form-row" id="pb-msg-row">
+          <label for="pb-msg">弹窗内容 *</label>
+          <textarea class="field" id="pb-msg" rows="4" placeholder="观众点击后弹出的内容"></textarea>
+        </div>
+        <div class="form-row hidden" id="pb-url-row">
+          <label for="pb-url">链接 URL *</label>
+          <input class="field" type="url" id="pb-url" placeholder="https://...">
+        </div>
+        <div id="pb-alert"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button type="button" class="btn primary" id="pb-ok">插 入</button>
+          <button type="button" class="btn" id="pb-cancel">取 消</button>
+        </div>
+      </div>
+    </div>
+  </div>
   </main>
 
   <footer class="footer">

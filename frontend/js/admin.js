@@ -83,19 +83,45 @@
       insertHtmlAtCursor('<img src="' + Blog.escapeHtml(url) + '" alt="图片">');
     });
     var popupBtn = $("e-popup");
-    if (popupBtn) popupBtn.addEventListener("click", function () {
-      var text = prompt("按钮文字（观众点击的按钮）");
-      if (!text) return;
-      var type = prompt("按钮行为：1=弹窗内容 2=跳转链接");
-      if (type === "2") {
-        var url = prompt("跳转链接 URL");
-        if (!url) return;
-        insertHtmlAtCursor('<button class="popup-btn" data-url="' + Blog.escapeHtml(url) + '">' + Blog.escapeHtml(text) + "</button>");
-      } else {
-        var msg = prompt("点击后弹窗内容");
-        if (!msg) return;
+    if (popupBtn) popupBtn.addEventListener("click", function () { openPopupConfig(); });
+    function openPopupConfig() {
+      $("pb-text").value = "";
+      $("pb-msg").value = "";
+      $("pb-url").value = "";
+      $("pb-alert").innerHTML = "";
+      var m = document.querySelector('input[name="pb-type"][value="msg"]');
+      if (m) m.checked = true;
+      togglePbRows("msg");
+      $("popup-config").style.display = "flex";
+    }
+    function closePopupConfig() {
+      $("popup-config").style.display = "none";
+    }
+    function togglePbRows(type) {
+      $("pb-msg-row").classList.toggle("hidden", type !== "msg");
+      $("pb-url-row").classList.toggle("hidden", type !== "url");
+    }
+    function insertPopupBtn() {
+      var text = $("pb-text").value.trim();
+      var typeEl = document.querySelector('input[name="pb-type"]:checked');
+      var type = typeEl ? typeEl.value : "msg";
+      var msg = $("pb-msg").value.trim();
+      var url = $("pb-url").value.trim();
+      if (!text) { showAlert("pb-alert", "按钮文字不能为空"); return; }
+      if (type === "msg") {
+        if (!msg) { showAlert("pb-alert", "弹窗内容不能为空"); return; }
         insertHtmlAtCursor('<button class="popup-btn" data-msg="' + Blog.escapeHtml(msg) + '">' + Blog.escapeHtml(text) + "</button>");
+      } else {
+        if (!url) { showAlert("pb-alert", "链接 URL 不能为空"); return; }
+        insertHtmlAtCursor('<button class="popup-btn" data-url="' + Blog.escapeHtml(url) + '">' + Blog.escapeHtml(text) + "</button>");
       }
+      closePopupConfig();
+    }
+    var pbOk = $("pb-ok"), pbCancel = $("pb-cancel");
+    if (pbOk) pbOk.addEventListener("click", insertPopupBtn);
+    if (pbCancel) pbCancel.addEventListener("click", closePopupConfig);
+    document.querySelectorAll('input[name="pb-type"]').forEach(function (r) {
+      r.addEventListener("change", function () { togglePbRows(r.value); });
     });
   }
 
