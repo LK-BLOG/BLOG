@@ -918,6 +918,8 @@ async def _call_bot(env, system_prompt: str, msgs: list) -> str:
             "max_tokens": 800,
             "temperature": 0.7,
         }
+        if p["name"] == "Agnes":
+            payload["reasoning_effort"] = "high"
         try:
             resp = await _post_chat(p, payload)
         except Exception:
@@ -1047,6 +1049,8 @@ async def chat(body: ChatIn, request: Request):
             "max_tokens": 800,
             "temperature": 0.7,
         }
+        if p["name"] == "Agnes":
+            payload["reasoning_effort"] = "high"
         payload["tools"] = [
             {
                 "type": "function",
