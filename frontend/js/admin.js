@@ -93,7 +93,7 @@
   }
 
   function mdToHtml(md) {
-    var html = mdToHtml(md);
+  var html = window.marked ? marked.parse(md || "") : (md || "");
     return window.DOMPurify ? DOMPurify.sanitize(html) : html;
   }
 
