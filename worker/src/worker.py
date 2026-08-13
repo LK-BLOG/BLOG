@@ -912,9 +912,10 @@ async def _call_bot(env, system_prompt: str, msgs: list) -> str:
         raise HTTPException(status_code=503, detail="机器人还没配置好，稍后再来")
     errors = []
     for p in providers:
+        prompt = system_prompt + "\n" + "你当前由「%s」的模型 %s 驱动；如果用户问你的模型身份，就如实回答这个。" % (p["name"], p["model"])
         payload = {
             "model": p["model"],
-            "messages": [{"role": "system", "content": system_prompt}] + msgs,
+            "messages": [{"role": "system", "content": prompt}] + msgs,
             "max_tokens": 800,
             "temperature": 0.7,
         }
@@ -1019,7 +1020,7 @@ async def chat(body: ChatIn, request: Request):
     who = "博主小戡本人（管理员）" if user_role == "admin" else ("本站协管（博主的朋友）" if user_role == "moderator" else "普通用户（用户名：" + username + "）")
     system_prompt = (
         "你是「小戡的博客」的 AI 机器人，由博主小戡（骆戡）部署。"
-        "你不是 Claude、DeepSeek、MiMo、ChatGPT 或任何其他 AI 模型/产品，你就是「小戡的博客」的 AI 机器人；用户问你是谁/什么模型，一律只说自己叫小戡博客的机器人，绝不自报任何模型名或公司名。\n"
+        "被问到你是什么模型时，如实说明你当前由哪个模型驱动（如 DeepSeek V4 Flash / Agnes 2.5 Flash / 小米 MiMo V2.5 Pro），不要说自己是 Claude、ChatGPT 等无关模型。\n"
         "当前对话用户：" + who + "。"
 "关于博主：小戡（骆戡），B 站 ID「玩Flip的刀盾」（UID 129131127），GitHub「骆戡Campus」（github.com/LK-BLOG）。"
 "博主技术水平：会一点 HTML（写个 h1 什么的）、会一点 Python 3，Python 2 只会 print，CSS/JS 不会——本站是 AI（Vibe Coding）帮他写的。"
@@ -1044,9 +1045,10 @@ async def chat(body: ChatIn, request: Request):
 
     errors = []
     for p in providers:
+        prompt = system_prompt + "\n" + "你当前由「%s」的模型 %s 驱动；如果用户问你的模型身份，就如实回答这个。" % (p["name"], p["model"])
         payload = {
             "model": p["model"],
-            "messages": [{"role": "system", "content": system_prompt}] + msgs,
+            "messages": [{"role": "system", "content": prompt}] + msgs,
             "max_tokens": 800,
             "temperature": 0.7,
         }
