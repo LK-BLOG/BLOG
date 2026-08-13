@@ -42,12 +42,17 @@
   function renderComments(list) {
     var depth = {};
     var parentMap = {};
-    var childCount = {};
+    var children = {};
     list.forEach(function (m) {
       depth[m.id] = m.parent_id ? (depth[m.parent_id] || 0) + 1 : 0;
       parentMap[m.id] = m.parent_id || 0;
-      if (m.parent_id) childCount[m.parent_id] = (childCount[m.parent_id] || 0) + 1;
+      if (m.parent_id) (children[m.parent_id] = children[m.parent_id] || []).push(m.id);
     });
+    function subtreeCount(id) {
+      var total = 0;
+      (children[id] || []).forEach(function (cid) { total += 1 + subtreeCount(cid); });
+      return total;
+    }
     function hiddenByCollapse(m) {
       var p = parentMap[m.id];
       var guard = 0;
@@ -61,7 +66,7 @@
     var html = "";
     list.forEach(function (m) {
       if (hiddenByCollapse(m)) return;
-      var kids = childCount[m.id] || 0;
+      var kids = subtreeCount(m.id);
       // 有子回复的评论默认折叠（用户点击过的保持用户选择）
       if (kids && !(m.id in collapsed)) collapsed[m.id] = true;
       var d = Math.min(depth[m.id] || 0, 5);
