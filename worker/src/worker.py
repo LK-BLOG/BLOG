@@ -1380,7 +1380,15 @@ async def upload(body: UploadIn, request: Request):
 async def media(key: str, request: Request):
     obj = await request.scope["env"].XIAOKAN_MEDIA.get(key, "arrayBuffer")
     if obj is None:
-        raise HTTPException(status_code=404, detail="图片不存在")
+        placeholder = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180">'
+            '<rect width="100%" height="100%" fill="#c0c0c0"/>'
+            '<rect x="8" y="8" width="304" height="164" fill="none" stroke="#808080" stroke-width="2"/>'
+            '<text x="160" y="86" font-family="SimSun,serif" font-size="18" fill="#000" text-anchor="middle">图片已过期</text>'
+            '<text x="160" y="112" font-family="SimSun,serif" font-size="12" fill="#404040" text-anchor="middle">图床保存 14 天</text>'
+            "</svg>"
+        )
+        return Response(content=placeholder, media_type="image/svg+xml")
     from js import Uint8Array
     raw = bytes(Uint8Array.new(obj).to_py())
     ext = key.rsplit(".", 1)[-1]
