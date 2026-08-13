@@ -168,6 +168,8 @@
       if (btn.dataset.bound) return;
       btn.dataset.bound = "1";
       btn.addEventListener("click", function () {
+        var url = btn.getAttribute("data-url");
+        if (url) { window.open(url, "_blank", "noopener"); return; }
         showWin98Popup(btn.getAttribute("data-msg") || "");
       });
     });

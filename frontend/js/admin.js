@@ -86,9 +86,16 @@
     if (popupBtn) popupBtn.addEventListener("click", function () {
       var text = prompt("按钮文字（观众点击的按钮）");
       if (!text) return;
-      var msg = prompt("点击后弹窗内容");
-      if (!msg) return;
-      insertHtmlAtCursor('<button class="popup-btn" data-msg="' + Blog.escapeHtml(msg) + '">' + Blog.escapeHtml(text) + "</button>");
+      var type = prompt("按钮行为：1=弹窗内容 2=跳转链接");
+      if (type === "2") {
+        var url = prompt("跳转链接 URL");
+        if (!url) return;
+        insertHtmlAtCursor('<button class="popup-btn" data-url="' + Blog.escapeHtml(url) + '">' + Blog.escapeHtml(text) + "</button>");
+      } else {
+        var msg = prompt("点击后弹窗内容");
+        if (!msg) return;
+        insertHtmlAtCursor('<button class="popup-btn" data-msg="' + Blog.escapeHtml(msg) + '">' + Blog.escapeHtml(text) + "</button>");
+      }
     });
   }
 
