@@ -1369,7 +1369,10 @@ async def upload(body: UploadIn, request: Request):
     if len(raw) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="图片不能超过 5MB")
     key = "img/" + _today_str().replace("-", "") + "/" + uuid.uuid4().hex[:12] + "." + ext
-    await request.scope["env"].XIAOKAN_MEDIA.put(key, raw)
+    from pyodide.ffi import to_js
+    from js import Object
+    opts = to_js({"expirationTtl": 14 * 24 * 3600}, dict_converter=Object.fromEntries)
+    await request.scope["env"].XIAOKAN_MEDIA.put(key, raw, opts)
     return {"url": "/api/media/" + key}
 
 
