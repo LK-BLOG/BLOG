@@ -93,6 +93,18 @@
       b.addEventListener("click", function () {
         var id = b.dataset.toggle;
         collapsed[id] = !collapsed[id];
+        if (!collapsed[id]) {
+          // 展开时同时展开整棵子树（清除所有后代的折叠标记）
+          list.forEach(function (m) {
+            var p = parentMap[m.id];
+            var guard = 0;
+            while (p && guard < 20) {
+              if (p === id) { delete collapsed[m.id]; break; }
+              p = parentMap[p] || 0;
+              guard++;
+            }
+          });
+        }
         renderComments(list);
       });
     });
