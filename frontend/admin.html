@@ -158,11 +158,17 @@
                   </select>
                 </div>
                 <div class="form-row">
+                  <label><input type="checkbox" id="e-pinned" style="margin-right:4px">置顶文章</label>
+                  <span class="hint">排在文章列表最前，带 📌 标记</span>
+                </div>
+                <div class="form-row">
                   <label>图片</label>
-                  <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <button type="button" class="btn" id="e-img-upload">上传图片</button>
+                    <input type="file" id="e-img-file" accept="image/*" style="display:none">
                     <button type="button" class="btn" id="e-img-url">插入图片链接</button>
                     <button type="button" class="btn" id="e-popup">插入互动按钮</button>
-                    <span class="hint" style="align-self:center">按钮：观众点击弹窗；图片：填 URL 生成 ![](url)</span>
+                    <span class="hint" style="align-self:center">图片上传 <5MB，jpg/png/gif/webp</span>
                   </div>
                 </div>
                 <div class="form-row">

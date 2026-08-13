@@ -11,6 +11,7 @@ import hmac
 import os
 import re
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Request
@@ -149,6 +150,7 @@ class ArticleIn(BaseModel):
     content_md: str = Field(min_length=1, max_length=100000)
     tags: str = Field(default="", max_length=200)
     status: str = Field(default="published", pattern="^(published|draft)$")
+    pinned: int = Field(default=0, ge=0, le=1)
 
 
 class PasswordIn(BaseModel):
@@ -189,6 +191,11 @@ class ReportResolveIn(BaseModel):
 
 class AnnouncementIn(BaseModel):
     text: str = Field(max_length=500)
+
+
+class UploadIn(BaseModel):
+    filename: str = Field(min_length=1, max_length=200)
+    data: str = Field(min_length=1, max_length=8000000)
 
 class MessageIn(BaseModel):
     nickname: str | None = Field(default=None, max_length=30)
@@ -367,11 +374,11 @@ async def list_articles(request: Request):
     show_all = request.query_params.get("all") == "1" and is_admin
     if show_all:
         res = await db.prepare(
-            "SELECT slug, title, tags, status, views, created_at, updated_at FROM articles ORDER BY created_at DESC"
+            "SELECT slug, title, tags, status, pinned, views, created_at, updated_at FROM articles ORDER BY pinned DESC, created_at DESC"
         ).all()
     else:
         res = await db.prepare(
-            "SELECT slug, title, tags, status, views, created_at, updated_at FROM articles WHERE status = 'published' ORDER BY created_at DESC"
+            "SELECT slug, title, tags, status, pinned, views, created_at, updated_at FROM articles WHERE status = 'published' ORDER BY pinned DESC, created_at DESC"
         ).all()
     return {"articles": res.results}
 
@@ -380,7 +387,7 @@ async def list_articles(request: Request):
 async def get_article(slug: str, request: Request):
     db = _db(request)
     row = await db.prepare(
-        "SELECT slug, title, content_md, tags, status, views, created_at, updated_at FROM articles WHERE slug = ?"
+        "SELECT slug, title, content_md, tags, status, pinned, views, created_at, updated_at FROM articles WHERE slug = ?"
     ).bind(slug).first()
     if not row:
         raise HTTPException(status_code=404, detail="文章不存在")
@@ -405,10 +412,11 @@ async def create_article(body: ArticleIn, request: Request):
     now = _now_iso()
     tags = body.tags.strip()
     status = body.status
+    pinned = body.pinned
     db = _db(request)
     await db.prepare(
-        "INSERT INTO articles (slug, title, content_md, tags, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).bind(slug, body.title.strip(), body.content_md, tags, status, now, now).run()
+        "INSERT INTO articles (slug, title, content_md, tags, status, pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind(slug, body.title.strip(), body.content_md, tags, status, pinned, now, now).run()
     await _log_audit(db, _actor(request), "create_article", "article", None, slug)
     return {"ok": True, "slug": slug}
 
@@ -418,8 +426,8 @@ async def update_article(slug: str, body: ArticleIn, request: Request):
     _check_admin(request)
     db = _db(request)
     res = await db.prepare(
-        "UPDATE articles SET title = ?, content_md = ?, tags = ?, status = ?, updated_at = ? WHERE slug = ?"
-    ).bind(body.title.strip(), body.content_md, body.tags.strip(), body.status, _now_iso(), slug).run()
+        "UPDATE articles SET title = ?, content_md = ?, tags = ?, status = ?, pinned = ?, updated_at = ? WHERE slug = ?"
+    ).bind(body.title.strip(), body.content_md, body.tags.strip(), body.status, body.pinned, _now_iso(), slug).run()
     if not res.meta.changes:
         raise HTTPException(status_code=404, detail="文章不存在")
     await _log_audit(db, _actor(request), "update_article", "article", None, slug)
@@ -539,7 +547,7 @@ async def list_comments(slug: str, request: Request):
         page = 1
     per = 20
     res = await db.prepare(
-        "SELECT id, nickname, content, created_at, user_id, parent_id, is_bot FROM comments "
+        "SELECT id, nickname, content, created_at, user_id, parent_id, is_bot, likes FROM comments "
         "WHERE article_slug = ? ORDER BY id ASC LIMIT 500"
     ).bind(slug).all()
     # 按顶层评论分页，每页附带完整回复树
@@ -569,12 +577,24 @@ async def list_comments(slug: str, request: Request):
         uname, role = parsed
         if role in ("admin", "moderator"):
             can_mod = True
+            my_id = -1 if role == "admin" else my_id
         else:
             urow = await db.prepare("SELECT id FROM users WHERE username = ?").bind(uname).first()
             my_id = urow["id"] if urow else None
+    liked_ids = set()
+    if my_id is not None:
+        ids = [c["id"] for c in selected]
+        if ids:
+            ph = ",".join("?" * len(ids))
+            lres = await db.prepare(
+                "SELECT comment_id FROM comment_likes WHERE user_id = ? AND comment_id IN (%s)" % ph
+            ).bind(my_id, *ids).all()
+            liked_ids = {int(r["comment_id"]) for r in lres.results}
     out = []
     for c in selected:
         c["is_mine"] = bool(can_mod or (my_id is not None and c.get("user_id") == my_id))
+        c["liked"] = int(c["id"]) in liked_ids
+        c["likes"] = int(c.get("likes") or 0)
         out.append(c)
     return {"comments": out, "total": total, "page": page, "total_pages": total_pages, "per": per}
 
@@ -708,6 +728,45 @@ async def delete_comment(comment_id: int, request: Request):
     ).bind(comment_id, comment_id).run()
     await _log_audit(db, _actor(request), "delete_comment", "comment", comment_id)
     return {"ok": True}
+
+@app.post("/api/comments/{comment_id}/like")
+async def toggle_like(comment_id: int, request: Request):
+    username, user_role = _require_auth(request)
+    db = _db(request)
+    row = await db.prepare("SELECT id FROM comments WHERE id = ?").bind(comment_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="评论不存在")
+    if user_role == "admin":
+        key_uid = -1
+    else:
+        urow = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
+        if not urow:
+            raise HTTPException(status_code=401, detail="账号不存在")
+        key_uid = urow["id"]
+    liked = await db.prepare("SELECT 1 FROM comment_likes WHERE user_id = ? AND comment_id = ?").bind(key_uid, comment_id).first()
+    if liked:
+        await db.prepare("DELETE FROM comment_likes WHERE user_id = ? AND comment_id = ?").bind(key_uid, comment_id).run()
+        await db.prepare("UPDATE comments SET likes = MAX(0, likes - 1) WHERE id = ?").bind(comment_id).run()
+        new_liked = False
+    else:
+        await db.prepare("INSERT INTO comment_likes (user_id, comment_id, created_at) VALUES (?, ?, ?)").bind(key_uid, comment_id, _now_iso()).run()
+        await db.prepare("UPDATE comments SET likes = likes + 1 WHERE id = ?").bind(comment_id).run()
+        new_liked = True
+    nrow = await db.prepare("SELECT likes FROM comments WHERE id = ?").bind(comment_id).first()
+    return {"ok": True, "liked": new_liked, "likes": int(nrow["likes"]) if nrow else 0}
+
+
+@app.get("/api/archive")
+async def archive(request: Request):
+    res = await _db(request).prepare(
+        "SELECT slug, title, created_at FROM articles WHERE status = 'published' ORDER BY created_at DESC"
+    ).all()
+    groups = {}
+    for a in res.results:
+        ym = (a["created_at"] or "")[:7]
+        groups.setdefault(ym, []).append(a)
+    return {"archive": [{"month": k, "articles": groups[k]} for k in sorted(groups, reverse=True)]}
+
 
 # ---------- AI 机器人（OpenCode Zen 免费模型） ----------
 
@@ -1286,6 +1345,44 @@ async def put_announcement(body: AnnouncementIn, request: Request):
     ).bind(text).run()
     await _log_audit(db, _actor(request), "set_announcement", "setting", None, text[:60])
     return {"ok": True, "text": text}
+
+
+# ---------- 图床（KV） ----------
+
+ALLOWED_IMG = {
+    "jpg": "image/jpeg", "jpeg": "image/jpeg",
+    "png": "image/png", "gif": "image/gif", "webp": "image/webp",
+}
+
+
+@app.post("/api/upload")
+async def upload(body: UploadIn, request: Request):
+    _check_admin(request)
+    fn = body.filename.lower()
+    ext = fn.rsplit(".", 1)[-1] if "." in fn else ""
+    if ext not in ALLOWED_IMG:
+        raise HTTPException(status_code=400, detail="只支持 jpg/png/gif/webp")
+    try:
+        raw = base64.b64decode(body.data)
+    except Exception:
+        raise HTTPException(status_code=400, detail="图片数据无效")
+    if len(raw) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="图片不能超过 5MB")
+    key = "img/" + _today_str().replace("-", "") + "/" + uuid.uuid4().hex[:12] + "." + ext
+    await request.scope["env"].XIAOKAN_MEDIA.put(key, raw)
+    return {"url": "/api/media/" + key}
+
+
+@app.get("/api/media/{key:path}")
+async def media(key: str, request: Request):
+    obj = await request.scope["env"].XIAOKAN_MEDIA.get(key, "arrayBuffer")
+    if obj is None:
+        raise HTTPException(status_code=404, detail="图片不存在")
+    from js import Uint8Array
+    raw = bytes(Uint8Array.new(obj).to_py())
+    ext = key.rsplit(".", 1)[-1]
+    ctype = ALLOWED_IMG.get(ext, "application/octet-stream")
+    return Response(content=raw, media_type=ctype)
 
 
 # ---------- RSS / Sitemap ----------

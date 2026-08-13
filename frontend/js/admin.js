@@ -55,6 +55,27 @@
       var pos = start + ins.length;
       if (ta.setSelectionRange) ta.setSelectionRange(pos, pos);
     }
+    var upBtn = $("e-img-upload");
+    var fileInput = $("e-img-file");
+    if (upBtn && fileInput) {
+      upBtn.addEventListener("click", function () { fileInput.click(); });
+      fileInput.addEventListener("change", function () {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) { alert("\u56fe\u7247\u4e0d\u80fd\u8d85\u8fc7 5MB"); fileInput.value = ""; return; }
+        var reader = new FileReader();
+        reader.onload = function () {
+          var b64 = String(reader.result).split(",")[1] || "";
+          Blog.api("/api/upload", { method: "POST", body: { filename: file.name, data: b64 } })
+            .then(function (d) {
+              insertHtmlAtCursor('<img src="' + d.url + '" alt="' + Blog.escapeHtml(file.name) + '">');
+            })
+            .catch(function (err) { alert("\u4e0a\u4f20\u5931\u8d25\uff1a" + err.message); })
+            .finally(function () { fileInput.value = ""; });
+        };
+        reader.readAsDataURL(file);
+      });
+    }
     var imgBtn = $("e-img-url");
     if (imgBtn) imgBtn.addEventListener("click", function () {
       var url = prompt("图片链接 URL（外链或上传后的地址）");
@@ -235,6 +256,7 @@
     $("e-slug").readOnly = false;
     if ($("e-tags")) $("e-tags").value = "";
     if ($("e-status")) $("e-status").value = "published";
+    if ($("e-pinned")) $("e-pinned").checked = false;
     setMarkdown("");
     setEditorMode("rich");
     $("editor-title").textContent = slug ? "编辑文章：" + slug : "写新文章";
@@ -246,6 +268,7 @@
         $("e-slug").readOnly = true;
         if ($("e-tags")) $("e-tags").value = a.tags || "";
         if ($("e-status")) $("e-status").value = a.status || "published";
+        if ($("e-pinned")) $("e-pinned").checked = !!a.pinned;
         setMarkdown(a.content_md);
       }).catch(function (err) {
         showAlert("editor-alert", "加载文章失败：" + err.message);
@@ -261,7 +284,7 @@
     var slug = $("e-slug").value.trim();
     if (!slug) slug = "post-" + Date.now();
 
-    var payload = { title: title, slug: slug, content_md: content, tags: $("e-tags") ? $("e-tags").value.trim() : "", status: $("e-status") ? $("e-status").value : "published" };
+    var payload = { title: title, slug: slug, content_md: content, tags: $("e-tags") ? $("e-tags").value.trim() : "", status: $("e-status") ? $("e-status").value : "published", pinned: ($("e-pinned") && $("e-pinned").checked) ? 1 : 0 };
     var req = editingSlug
       ? Blog.api("/api/articles/" + encodeURIComponent(editingSlug), { method: "PUT", body: payload })
       : Blog.api("/api/articles", { method: "POST", body: payload });

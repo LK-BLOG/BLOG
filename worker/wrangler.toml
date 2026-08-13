@@ -24,3 +24,7 @@ migrations_dir = "migrations"
 
 [observability]
 enabled = true
+
+[[kv_namespaces]]
+binding = "XIAOKAN_MEDIA"
+id = "732fd3b2bfc94b7a93cacc2da57b9b5c"

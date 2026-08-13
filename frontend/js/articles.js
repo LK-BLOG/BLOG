@@ -29,8 +29,9 @@
       var tags = tagsOf(a).map(function (t) {
         return '<span class="article-tag" data-tag="' + esc(t) + '">#' + esc(t) + "</span>";
       }).join(" ");
+      var pin = a.pinned ? "📌 " : "";
       html += '<div class="article-row">' +
-        '<a href="article.html?slug=' + encodeURIComponent(a.slug) + '">' + esc(a.title) + "</a>" +
+        '<a href="article.html?slug=' + encodeURIComponent(a.slug) + '">' + pin + esc(a.title) + "</a>" +
         '<span class="article-date">' + esc(Blog.fmtDate(a.created_at)) + " · " + (a.views || 0) + " 次浏览" + (tags ? " · " + tags : "") + "</span>" +
         "</div>";
     });
@@ -72,5 +73,41 @@
     box.innerHTML = '<div class="alert error">加载失败：' + esc(err.message) + "（检查 config.js 里的 API 地址）</div>";
   });
 
+  function renderArchive() {
+    box.innerHTML = '<p class="muted">加载中…</p>';
+    Blog.api("/api/archive").then(function (d) {
+      var groups = (d && d.archive) || [];
+      if (!groups.length) { box.innerHTML = '<p class="muted px12">还没有文章。</p>'; return; }
+      var html = "";
+      groups.forEach(function (g) {
+        html += '<div class="archive-month"><b>' + esc(g.month) + "</b> (" + g.articles.length + ")</div>";
+        g.articles.forEach(function (a) {
+          html += '<div class="article-row"><a href="article.html?slug=' + encodeURIComponent(a.slug) + '">' + esc(a.title) + "</a>" +
+            '<span class="article-date">' + esc(Blog.fmtDate(a.created_at)) + "</span></div>";
+        });
+      });
+      box.innerHTML = html;
+    }).catch(function (err) {
+      box.innerHTML = '<div class="alert error">' + esc(err.message) + "</div>";
+    });
+  }
+
   if (searchInput) searchInput.addEventListener("input", render);
+  var viewBtn = document.getElementById("view-toggle");
+  if (viewBtn) viewBtn.addEventListener("click", function () {
+    var arch = viewBtn.dataset.arch === "1";
+    if (arch) {
+      viewBtn.dataset.arch = "0";
+      viewBtn.textContent = "📂 归档";
+      if (tagBox) tagBox.style.display = "";
+      if (searchInput) searchInput.style.display = "";
+      render();
+    } else {
+      viewBtn.dataset.arch = "1";
+      viewBtn.textContent = "📖 列表";
+      if (tagBox) tagBox.style.display = "none";
+      if (searchInput) searchInput.style.display = "none";
+      renderArchive();
+    }
+  });
 })();

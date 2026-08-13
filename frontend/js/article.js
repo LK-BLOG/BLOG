@@ -76,6 +76,7 @@
       if (kids) {
         ops += "<button class='btn' data-toggle='" + m.id + "'>" + (collapsed[m.id] ? "▸ 展开" : "▾ 折叠") + " (" + kids + ")</button> ";
       }
+      ops += "<button class='btn " + (m.liked ? "primary" : "") + "' data-like='" + m.id + "'>⭐ " + (m.likes || 0) + "</button> ";
       ops += "<button class='btn' data-reply='" + m.id + "' data-nick='" + esc(m.nickname) + "'>回复</button> ";
       if (m.is_mine) {
         ops += "<button class='btn danger' data-del='" + m.id + "'>删除</button>";
@@ -117,6 +118,21 @@
         if (ta) ta.focus();
       });
     });
+    cmtList.querySelectorAll("[data-like]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        Blog.api("/api/comments/" + encodeURIComponent(b.dataset.like) + "/like", { method: "POST" })
+          .then(function (d) {
+            if (d && typeof d.liked === "boolean") {
+              b.classList.toggle("primary", d.liked);
+              b.textContent = "⭐ " + (d.likes || 0);
+            }
+          })
+          .catch(function (err) {
+            if (err.status === 401) showCmtAlert("请先登录");
+            else showCmtAlert("点赞失败：" + err.message);
+          });
+      });
+    });
     cmtList.querySelectorAll("[data-del]").forEach(function (b) {
       b.addEventListener("click", function () {
         if (!confirm("确定删除这条评论？")) return;
@@ -155,6 +171,43 @@
         showWin98Popup(btn.getAttribute("data-msg") || "");
       });
     });
+  }
+
+  function bindCodeCopy() {
+    document.querySelectorAll(".markdown-body pre").forEach(function (pre) {
+      if (pre.dataset.copied) return;
+      pre.dataset.copied = "1";
+      var code = pre.querySelector("code");
+      var wrap = document.createElement("div");
+      wrap.style.cssText = "position:relative;";
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+      var btn = document.createElement("button");
+      btn.className = "btn btn-sm";
+      btn.textContent = "复制";
+      btn.style.cssText = "position:absolute;top:4px;right:4px;z-index:5;";
+      wrap.appendChild(btn);
+      btn.addEventListener("click", function () {
+        var text = code ? code.textContent : pre.textContent;
+        function done() { btn.textContent = "已复制"; setTimeout(function () { btn.textContent = "复制"; }, 1500); }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
+        } else {
+          fallbackCopy(text); done();
+        }
+      });
+    });
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta);
   }
 
   function showWin98Popup(msg) {
@@ -234,6 +287,7 @@
       commentsBox.classList.remove("hidden");
       renderAuth();
       bindPopups();
+      bindCodeCopy();
       loadComments();
     }).catch(function (err) {
       box.innerHTML = '<div class="win-body"><div class="alert error">加载失败：' + esc(err.message) + "</div></div>";
