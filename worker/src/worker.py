@@ -501,10 +501,35 @@ async def delete_message(message_id: int, request: Request):
 @app.get("/api/articles/{slug}/comments")
 async def list_comments(slug: str, request: Request):
     db = _db(request)
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    per = 20
     res = await db.prepare(
         "SELECT id, nickname, content, created_at, user_id, parent_id, is_bot FROM comments "
         "WHERE article_slug = ? ORDER BY id ASC LIMIT 500"
     ).bind(slug).all()
+    # 按顶层评论分页，每页附带完整回复树
+    tops = [c for c in res.results if not c.get("parent_id")]
+    total = len(tops)
+    total_pages = max(1, (total + per - 1) // per)
+    page = min(page, total_pages)
+
+    def descendants(cid):
+        out = []
+        for c in res.results:
+            if c.get("parent_id") == cid:
+                out.append(c)
+                out.extend(descendants(c["id"]))
+        return out
+
+    selected = []
+    for t in tops[(page - 1) * per: page * per]:
+        selected.append(t)
+        selected.extend(descendants(t["id"]))
+    selected.sort(key=lambda c: c["id"])
+
     parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
     can_mod = False
     my_id = None
@@ -516,10 +541,10 @@ async def list_comments(slug: str, request: Request):
             urow = await db.prepare("SELECT id FROM users WHERE username = ?").bind(uname).first()
             my_id = urow["id"] if urow else None
     out = []
-    for c in res.results:
+    for c in selected:
         c["is_mine"] = bool(can_mod or (my_id is not None and c.get("user_id") == my_id))
         out.append(c)
-    return {"comments": out}
+    return {"comments": out, "total": total, "page": page, "total_pages": total_pages, "per": per}
 
 
 @app.post("/api/articles/{slug}/comments")

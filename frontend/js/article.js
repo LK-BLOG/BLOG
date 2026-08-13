@@ -177,10 +177,36 @@
     ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); });
   }
 
-  function loadComments() {
+  var cmtPage = 1;
+
+  function renderPager(total, totalPages) {
+    var pager = document.getElementById("cmt-pager");
+    if (!pager) {
+      pager = document.createElement("div");
+      pager.id = "cmt-pager";
+      pager.className = "mb8";
+      cmtList.parentNode.insertBefore(pager, cmtList);
+    }
+    if (totalPages <= 1) {
+      pager.innerHTML = '<span class="muted px12">共 ' + total + ' 条评论</span>';
+      return;
+    }
+    var h = "";
+    if (cmtPage > 1) h += "<button class='btn btn-sm' data-pg='" + (cmtPage - 1) + "'>上一页</button> ";
+    h += '<span class="muted px12">第 ' + cmtPage + " / " + totalPages + " 页 · 共 " + total + " 条评论</span> ";
+    if (cmtPage < totalPages) h += "<button class='btn btn-sm' data-pg='" + (cmtPage + 1) + "'>下一页</button>";
+    pager.innerHTML = h;
+    pager.querySelectorAll("[data-pg]").forEach(function (b) {
+      b.addEventListener("click", function () { loadComments(parseInt(b.dataset.pg, 10)); });
+    });
+  }
+
+  function loadComments(page) {
+    if (page) cmtPage = page;
     cmtList.innerHTML = '<p class="muted">加载中…</p>';
-    Blog.api("/api/articles/" + encodeURIComponent(slug) + "/comments").then(function (data) {
+    Blog.api("/api/articles/" + encodeURIComponent(slug) + "/comments?page=" + cmtPage).then(function (data) {
       var list = (data && data.comments) || [];
+      renderPager((data && data.total) || 0, (data && data.total_pages) || 1);
       if (!list.length) {
         cmtList.innerHTML = '<p class="muted">还没有评论，来说两句？</p>';
         return;
