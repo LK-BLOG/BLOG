@@ -39,14 +39,27 @@
     }
     $("mode-rich").addEventListener("click", function () { setEditorMode("rich"); });
     $("mode-md").addEventListener("click", function () { setEditorMode("md"); });
+    function insertHtmlAtCursor(html) {
+      var ta = $("e-content");
+      if (editorMode === "rich" && quill) {
+        var idx = quill.getSelection() ? quill.getSelection().index : quill.getLength();
+        quill.clipboard.dangerouslyPasteHTML(idx, html, "user");
+        return;
+      }
+      var start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+      var end = ta.selectionEnd != null ? ta.selectionEnd : start;
+      var prefix = (start > 0 && ta.value.charAt(start - 1) !== "\n") ? "\n" : "";
+      var ins = prefix + html + "\n";
+      ta.value = ta.value.slice(0, start) + ins + ta.value.slice(end);
+      ta.focus();
+      var pos = start + ins.length;
+      if (ta.setSelectionRange) ta.setSelectionRange(pos, pos);
+    }
     var imgBtn = $("e-img-url");
     if (imgBtn) imgBtn.addEventListener("click", function () {
       var url = prompt("图片链接 URL（外链或上传后的地址）");
       if (!url) return;
-      setEditorMode("md");
-      var ta = $("e-content");
-      ta.value = (ta.value ? ta.value + "\n\n" : "") + "![图片](" + url + ")\n";
-      ta.focus();
+      insertHtmlAtCursor('<img src="' + Blog.escapeHtml(url) + '" alt="图片">');
     });
     var popupBtn = $("e-popup");
     if (popupBtn) popupBtn.addEventListener("click", function () {
@@ -54,11 +67,7 @@
       if (!text) return;
       var msg = prompt("点击后弹窗内容");
       if (!msg) return;
-      var html = '<button class="popup-btn" data-msg="' + Blog.escapeHtml(msg) + '">' + Blog.escapeHtml(text) + "</button>";
-      setEditorMode("md");
-      var ta2 = $("e-content");
-      ta2.value = (ta2.value ? ta2.value + "\n\n" : "") + html + "\n";
-      ta2.focus();
+      insertHtmlAtCursor('<button class="popup-btn" data-msg="' + Blog.escapeHtml(msg) + '">' + Blog.escapeHtml(text) + "</button>");
     });
   }
 
