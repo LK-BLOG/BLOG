@@ -54,7 +54,7 @@
     }
     if (window.TurndownService) {
       turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-" });
-      turndown.keep(["button"]);
+      turndown.keep(["button", "u"]);
       turndown.addRule("strikethrough", {
         filter: ["del", "s", "strike"],
         replacement: function (content) { return "~~" + content + "~~"; }
