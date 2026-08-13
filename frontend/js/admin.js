@@ -53,7 +53,8 @@
       Quill.register(PopupBtn);
     }
     if (window.TurndownService) {
-      turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-", keep: ["button"] });
+      turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-" });
+      turndown.keep(["button"]);
       turndown.addRule("strikethrough", {
         filter: ["del", "s", "strike"],
         replacement: function (content) { return "~~" + content + "~~"; }
