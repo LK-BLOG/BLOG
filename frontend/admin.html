@@ -46,14 +46,48 @@
       <!-- 管理面板 -->
       <div id="panel-view" class="hidden">
         <div class="mb16" style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn primary" data-tab="articles">文章管理</button>
+          <button class="btn primary" data-tab="overview">📊 概览</button>
+          <button class="btn" data-tab="articles">文章管理</button>
           <button class="btn" data-tab="messages">留言管理</button>
           <button class="btn" data-tab="comments">评论管理</button>
           <button class="btn" data-tab="users">👥 用户管理</button>
           <button class="btn" data-tab="reports">🚩 举报记录</button>
+          <button class="btn" data-tab="audit">📋 操作日志</button>
           <button class="btn" data-tab="bot">🤖 机器人设置</button>
           <button class="btn" data-tab="editor" id="new-article-btn">＋ 写新文章</button>
           <button class="btn danger" id="logout-btn">退出登录</button>
+        </div>
+
+        <div id="tab-overview" class="tab-pane hidden">
+          <div class="win mb16">
+            <div class="win-title"><span class="win-label">📊 站点概览</span><span class="win-dots"><span class="dot"></span></span></div>
+            <div class="win-body">
+              <div id="stats-grid" class="stats-grid"><p class="muted px12">加载中…</p></div>
+              <div class="mt16">
+                <span class="muted px12">数据导出：</span>
+                <button class="btn" data-export="articles">文章</button>
+                <button class="btn" data-export="messages">留言</button>
+                <button class="btn" data-export="comments">评论</button>
+              </div>
+            </div>
+          </div>
+          <div class="win">
+            <div class="win-title"><span class="win-label">📢 公告</span><span class="win-dots"><span class="dot"></span></span></div>
+            <div class="win-body">
+              <div id="ann-alert"></div>
+              <form id="ann-form">
+                <div class="form-row">
+                  <label for="ann-text">首页公告 <span class="hint">空白 = 不显示</span></label>
+                  <input class="field" type="text" id="ann-text" maxlength="500" placeholder="如：欢迎光临小戡的博客">
+                </div>
+                <button type="submit" class="btn primary">保存公告</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-audit" class="tab-pane hidden">
+          <div class="win flat mb16" id="audit-box"><p class="muted px12">加载中…</p></div>
         </div>
 
         <div id="tab-articles" class="tab-pane">
@@ -115,6 +149,13 @@
                 <div class="form-row">
                   <label for="e-tags">标签 <span class="hint">逗号分隔，如 Python,整活</span></label>
                   <input class="field" type="text" id="e-tags" maxlength="200" placeholder="Python, 整活">
+                </div>
+                <div class="form-row">
+                  <label for="e-status">状态</label>
+                  <select class="field" id="e-status">
+                    <option value="published">发布（公开可见）</option>
+                    <option value="draft">草稿（不对外显示）</option>
+                  </select>
                 </div>
                 <div class="form-row">
                   <label>图片</label>

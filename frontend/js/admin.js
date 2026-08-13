@@ -135,6 +135,7 @@
     panelView.classList.remove("hidden");
     bindPanelEvents();
     bindBotForm();
+    bindOverview();
     var isMod = Blog.getRole() === "moderator";
     ["tab-articles", "tab-users", "tab-bot", "tab-editor", "new-article-btn"].forEach(function (id) {
       var el = $(id);
@@ -143,8 +144,7 @@
     if (isMod) {
       switchTab("messages");
     } else {
-      switchTab("articles");
-      loadArticles();
+      switchTab("overview");
     }
     loadMessages();
   }
@@ -177,14 +177,16 @@
     document.querySelectorAll("[data-tab]").forEach(function (b) {
       b.classList.toggle("primary", b.dataset.tab === tab);
     });
-    ["articles", "messages", "comments", "users", "reports", "bot", "editor"].forEach(function (t) {
+    ["overview", "articles", "messages", "comments", "users", "reports", "audit", "bot", "editor"].forEach(function (t) {
       $("tab-" + t).classList.toggle("hidden", t !== tab);
     });
+    if (tab === "overview") loadOverview();
     if (tab === "articles") loadArticles();
     if (tab === "messages") loadMessages();
     if (tab === "comments") loadComments();
     if (tab === "users") loadUsers();
     if (tab === "reports") loadReports();
+    if (tab === "audit") loadAudit();
     if (tab === "bot") loadBotSettings();
   }
 
@@ -192,7 +194,7 @@
   function loadArticles() {
     var box = $("articles-manage");
     box.innerHTML = '<p class="muted px12">加载中…</p>';
-    Blog.api("/api/articles").then(function (data) {
+    Blog.api("/api/articles?all=1").then(function (data) {
       var list = (data && data.articles) || [];
       if (!list.length) {
         box.innerHTML = '<p class="muted px12">还没有文章，点「＋ 写新文章」开写。</p>';
@@ -200,7 +202,8 @@
       }
       var html = '<table><tr><th>标题</th><th>日期</th><th style="width:150px">操作</th></tr>';
       list.forEach(function (a) {
-        html += "<tr><td>" + Blog.escapeHtml(a.title) + "</td>" +
+        var mark = a.status === "draft" ? ' <span class="tag tag-danger">草稿</span>' : "";
+        html += "<tr><td>" + Blog.escapeHtml(a.title) + mark + "</td>" +
           "<td class='nowrap'>" + Blog.escapeHtml(Blog.fmtDate(a.created_at)) + "</td>" +
           "<td><button class='btn' data-edit='" + Blog.escapeHtml(a.slug) + "'>编辑</button> " +
           "<button class='btn danger' data-del='" + Blog.escapeHtml(a.slug) + "'>删除</button></td></tr>";
@@ -231,6 +234,7 @@
     $("e-slug").value = "";
     $("e-slug").readOnly = false;
     if ($("e-tags")) $("e-tags").value = "";
+    if ($("e-status")) $("e-status").value = "published";
     setMarkdown("");
     setEditorMode("rich");
     $("editor-title").textContent = slug ? "编辑文章：" + slug : "写新文章";
@@ -241,6 +245,7 @@
         $("e-slug").value = a.slug;
         $("e-slug").readOnly = true;
         if ($("e-tags")) $("e-tags").value = a.tags || "";
+        if ($("e-status")) $("e-status").value = a.status || "published";
         setMarkdown(a.content_md);
       }).catch(function (err) {
         showAlert("editor-alert", "加载文章失败：" + err.message);
@@ -256,7 +261,7 @@
     var slug = $("e-slug").value.trim();
     if (!slug) slug = "post-" + Date.now();
 
-    var payload = { title: title, slug: slug, content_md: content, tags: $("e-tags") ? $("e-tags").value.trim() : "" };
+    var payload = { title: title, slug: slug, content_md: content, tags: $("e-tags") ? $("e-tags").value.trim() : "", status: $("e-status") ? $("e-status").value : "published" };
     var req = editingSlug
       ? Blog.api("/api/articles/" + encodeURIComponent(editingSlug), { method: "PUT", body: payload })
       : Blog.api("/api/articles", { method: "POST", body: payload });
@@ -288,7 +293,16 @@
           "<td><button class='btn danger' data-del='" + m.id + "'>删除</button></td></tr>";
       });
       html += "</table>";
-      box.innerHTML = html;
+      box.innerHTML = '<input class="field mb8" type="text" id="cmt-search" placeholder="按昵称筛选…" style="max-width:240px">' + html;
+      var si2 = document.getElementById("cmt-search");
+      if (si2) si2.addEventListener("input", function () {
+        var kw = si2.value.trim().toLowerCase();
+        box.querySelectorAll("table tr").forEach(function (tr, idx) {
+          if (idx === 0) return;
+          var nick = (tr.children[1] ? tr.children[1].textContent : "").toLowerCase();
+          tr.style.display = (!kw || nick.indexOf(kw) >= 0) ? "" : "none";
+        });
+      });
       box.querySelectorAll("[data-del]").forEach(function (b) {
         b.addEventListener("click", function () {
           if (!confirm("确定删除这条评论？")) return;
@@ -302,6 +316,65 @@
     });
   }
 
+  /* ---------- 概览 + 导出 + 公告 ---------- */
+  function loadOverview() {
+    Blog.api("/api/stats").then(function (d) {
+      var items = [
+        ["文章", d.articles], ["草稿", d.drafts],
+        ["留言", d.messages], ["评论", d.comments],
+        ["用户", d.users], ["今日注册", d.reg_today],
+        ["今日留言", d.msg_today], ["今日评论", d.cmt_today],
+        ["待处理举报", d.reports_open], ["今日 Bot 聊天", d.bot_today]
+      ];
+      var html = "";
+      items.forEach(function (it) {
+        html += '<div class="stat-card"><div class="stat-num">' + it[1] + '</div><div class="stat-label">' + it[0] + "</div></div>";
+      });
+      $("stats-grid").innerHTML = html;
+    }).catch(function (err) {
+      $("stats-grid").innerHTML = '<div class="alert error">' + Blog.escapeHtml(err.message) + "</div>";
+    });
+    Blog.api("/api/announcement").then(function (d) {
+      $("ann-text").value = (d && d.text) || "";
+    }).catch(function () {});
+  }
+
+  function bindOverview() {
+    var box = $("tab-overview");
+    if (!box) return;
+    box.querySelectorAll("[data-export]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        location.href = "/api/export/" + b.dataset.export + "?t=" + Date.now();
+      });
+    });
+    var form = $("ann-form");
+    if (form) form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      Blog.api("/api/announcement", { method: "PUT", body: { text: $("ann-text").value.trim() } })
+        .then(function () { $("ann-alert").innerHTML = '<div class="alert ok">已保存</div>'; })
+        .catch(function (err) { $("ann-alert").innerHTML = '<div class="alert error">' + Blog.escapeHtml(err.message) + "</div>"; });
+    });
+  }
+
+  /* ---------- 操作日志 ---------- */
+  function loadAudit() {
+    var box = $("audit-box");
+    box.innerHTML = '<p class="muted px12">加载中…</p>';
+    Blog.api("/api/audit").then(function (d) {
+      var list = (d && d.audit) || [];
+      if (!list.length) { box.innerHTML = '<p class="muted px12">还没有操作记录。</p>'; return; }
+      var html = '<table><tr><th>操作者</th><th>操作</th><th>目标</th><th>详情</th><th style="width:130px">时间</th></tr>';
+      list.forEach(function (a) {
+        html += "<tr><td>" + Blog.escapeHtml(a.actor) + "</td><td>" + Blog.escapeHtml(a.action) + "</td><td>" + Blog.escapeHtml(a.target_type || "") + " " + (a.target_id || "") + "</td><td>" + Blog.escapeHtml(a.detail || "") + "</td><td class='nowrap'>" + Blog.escapeHtml(Blog.fmtDate(a.created_at)) + "</td></tr>";
+      });
+      html += "</table>";
+      box.innerHTML = html;
+    }).catch(function (err) {
+      box.innerHTML = '<div class="alert error">' + Blog.escapeHtml(err.message) + "</div>";
+    });
+  }
+
+  /* ---------- 用户管理 ---------- */
   /* ---------- 用户管理 ---------- */
   function loadUsers() {
     var box = $("users-manage");
@@ -385,17 +458,31 @@
         box.innerHTML = '<p class="muted px12">还没有举报记录。</p>';
         return;
       }
-      var html = '<table><tr><th>类型</th><th>被举报内容</th><th>原因</th><th>举报人</th><th>状态</th><th style="width:130px">时间</th></tr>';
+      var html = '<table><tr><th>类型</th><th>被举报内容</th><th>原因</th><th>举报人</th><th>状态</th><th style="width:130px">时间</th><th style="width:150px">操作</th></tr>';
       list.forEach(function (r) {
         var st = r.status === "handled" ? "已处理" : "待处理";
+        var ops = "";
+        if (r.status === "open") {
+          ops = "<button class='btn btn-sm danger' data-resolve='" + r.id + "' data-act='delete'>删除+封</button> " +
+                "<button class='btn btn-sm' data-resolve='" + r.id + "' data-act='ignore'>忽略</button>";
+        }
         html += "<tr><td>" + (r.target_type === "comment" ? "评论" : "留言") + "</td>" +
           "<td>" + Blog.escapeHtml(r.content || "") + "</td>" +
           "<td>" + Blog.escapeHtml(r.reason || "") + "</td>" +
           "<td>" + Blog.escapeHtml(r.reporter || "") + "</td><td>" + st + "</td>" +
-          "<td class='nowrap'>" + Blog.escapeHtml(Blog.fmtDate(r.created_at)) + "</td></tr>";
+          "<td class='nowrap'>" + Blog.escapeHtml(Blog.fmtDate(r.created_at)) + "</td><td>" + ops + "</td></tr>";
       });
       html += "</table>";
       box.innerHTML = html;
+      box.querySelectorAll("[data-resolve]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var act = b.dataset.act;
+          if (act === "delete" && !confirm("确定删除该内容并封禁作者？")) return;
+          Blog.api("/api/reports/" + encodeURIComponent(b.dataset.resolve) + "/resolve", { method: "POST", body: { action: act, ban: act === "delete" } })
+            .then(function () { loadReports(); })
+            .catch(function (err) { alert("处理失败：" + err.message); });
+        });
+      });
     }).catch(function (err) {
       box.innerHTML = '<div class="alert error">加载失败：' + Blog.escapeHtml(err.message) + "</div>";
     });
@@ -454,7 +541,16 @@
           "<td><button class='btn danger' data-del='" + m.id + "'>删除</button></td></tr>";
       });
       html += "</table>";
-      box.innerHTML = html;
+      box.innerHTML = '<input class="field mb8" type="text" id="msg-search" placeholder="按昵称筛选…" style="max-width:240px">' + html;
+      var si = document.getElementById("msg-search");
+      if (si) si.addEventListener("input", function () {
+        var kw = si.value.trim().toLowerCase();
+        box.querySelectorAll("table tr").forEach(function (tr, idx) {
+          if (idx === 0) return;
+          var nick = (tr.children[0] ? tr.children[0].textContent : "").toLowerCase();
+          tr.style.display = (!kw || nick.indexOf(kw) >= 0) ? "" : "none";
+        });
+      });
       box.querySelectorAll("[data-del]").forEach(function (b) {
         b.addEventListener("click", function () {
           if (!confirm("确定删除这条留言？")) return;

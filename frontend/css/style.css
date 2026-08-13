@@ -497,3 +497,19 @@ th { background: var(--face); }
 }
 .tag-danger { border-color: #a00; color: #a00; }
 .btn-sm { font-size: 11px; padding: 1px 6px; }
+
+/* 概览统计卡片 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+.stat-card {
+  background: var(--window-bg);
+  border: 2px solid;
+  border-color: var(--hl) var(--dark) var(--dark) var(--hl);
+  padding: 8px;
+  text-align: center;
+}
+.stat-num { font-size: 22px; font-weight: bold; color: var(--titlebar); }
+.stat-label { font-size: 12px; color: var(--dim); }

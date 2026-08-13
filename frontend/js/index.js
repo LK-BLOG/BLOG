@@ -1,6 +1,14 @@
 /* 首页：拉取最新 3 篇文章（失败则静默隐藏） */
 (function () {
   "use strict";
+  // 公告
+  Blog.api("/api/announcement").then(function (d) {
+    var el = document.getElementById("announcement");
+    if (el && d && d.text) {
+      el.textContent = "📢 " + d.text;
+      el.classList.remove("hidden");
+    }
+  }).catch(function () {});
   var box = document.getElementById("latest-articles");
   if (!box) return;
   Blog.api("/api/articles").then(function (data) {

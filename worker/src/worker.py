@@ -148,6 +148,7 @@ class ArticleIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     content_md: str = Field(min_length=1, max_length=100000)
     tags: str = Field(default="", max_length=200)
+    status: str = Field(default="published", pattern="^(published|draft)$")
 
 
 class PasswordIn(BaseModel):
@@ -179,6 +180,15 @@ class ReportIn(BaseModel):
     target_type: str = Field(pattern="^(comment|message)$")
     target_id: int = Field(ge=1)
     reason: str = Field(min_length=1, max_length=200)
+
+
+class ReportResolveIn(BaseModel):
+    action: str = Field(pattern="^(delete|ignore)$")
+    ban: bool = False
+
+
+class AnnouncementIn(BaseModel):
+    text: str = Field(max_length=500)
 
 class MessageIn(BaseModel):
     nickname: str | None = Field(default=None, max_length=30)
@@ -343,6 +353,7 @@ async def change_password(body: PasswordIn, request: Request):
     if not row or not _verify_password(body.old_password, row["password_hash"]):
         raise HTTPException(status_code=400, detail="旧密码错误")
     await db.prepare("UPDATE users SET password_hash = ? WHERE username = ?").bind(_hash_password(body.new_password), username).run()
+    await _log_audit(db, _actor(request), "reset_password", "user", None, username)
     return {"ok": True}
 
 
@@ -350,9 +361,18 @@ async def change_password(body: PasswordIn, request: Request):
 
 @app.get("/api/articles")
 async def list_articles(request: Request):
-    res = await _db(request).prepare(
-        "SELECT slug, title, tags, views, created_at, updated_at FROM articles ORDER BY created_at DESC"
-    ).all()
+    db = _db(request)
+    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    is_admin = bool(parsed and parsed[1] == "admin")
+    show_all = request.query_params.get("all") == "1" and is_admin
+    if show_all:
+        res = await db.prepare(
+            "SELECT slug, title, tags, status, views, created_at, updated_at FROM articles ORDER BY created_at DESC"
+        ).all()
+    else:
+        res = await db.prepare(
+            "SELECT slug, title, tags, status, views, created_at, updated_at FROM articles WHERE status = 'published' ORDER BY created_at DESC"
+        ).all()
     return {"articles": res.results}
 
 
@@ -360,10 +380,14 @@ async def list_articles(request: Request):
 async def get_article(slug: str, request: Request):
     db = _db(request)
     row = await db.prepare(
-        "SELECT slug, title, content_md, tags, views, created_at, updated_at FROM articles WHERE slug = ?"
+        "SELECT slug, title, content_md, tags, status, views, created_at, updated_at FROM articles WHERE slug = ?"
     ).bind(slug).first()
     if not row:
         raise HTTPException(status_code=404, detail="文章不存在")
+    if row["status"] == "draft":
+        parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+        if not parsed or parsed[1] != "admin":
+            raise HTTPException(status_code=404, detail="文章不存在")
     await db.prepare("UPDATE articles SET views = views + 1 WHERE slug = ?").bind(slug).run()
     row["views"] = int(row.get("views") or 0) + 1
     return row
@@ -380,29 +404,36 @@ async def create_article(body: ArticleIn, request: Request):
         raise HTTPException(status_code=409, detail="slug 已存在，换个标识")
     now = _now_iso()
     tags = body.tags.strip()
-    await _db(request).prepare(
-        "INSERT INTO articles (slug, title, content_md, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
-    ).bind(slug, body.title.strip(), body.content_md, tags, now, now).run()
+    status = body.status
+    db = _db(request)
+    await db.prepare(
+        "INSERT INTO articles (slug, title, content_md, tags, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).bind(slug, body.title.strip(), body.content_md, tags, status, now, now).run()
+    await _log_audit(db, _actor(request), "create_article", "article", None, slug)
     return {"ok": True, "slug": slug}
 
 
 @app.put("/api/articles/{slug}")
 async def update_article(slug: str, body: ArticleIn, request: Request):
     _check_admin(request)
-    res = await _db(request).prepare(
-        "UPDATE articles SET title = ?, content_md = ?, tags = ?, updated_at = ? WHERE slug = ?"
-    ).bind(body.title.strip(), body.content_md, body.tags.strip(), _now_iso(), slug).run()
+    db = _db(request)
+    res = await db.prepare(
+        "UPDATE articles SET title = ?, content_md = ?, tags = ?, status = ?, updated_at = ? WHERE slug = ?"
+    ).bind(body.title.strip(), body.content_md, body.tags.strip(), body.status, _now_iso(), slug).run()
     if not res.meta.changes:
         raise HTTPException(status_code=404, detail="文章不存在")
+    await _log_audit(db, _actor(request), "update_article", "article", None, slug)
     return {"ok": True, "slug": slug}
 
 
 @app.delete("/api/articles/{slug}")
 async def delete_article(slug: str, request: Request):
     _check_admin(request)
-    res = await _db(request).prepare("DELETE FROM articles WHERE slug = ?").bind(slug).run()
+    db = _db(request)
+    res = await db.prepare("DELETE FROM articles WHERE slug = ?").bind(slug).run()
     if not res.meta.changes:
         raise HTTPException(status_code=404, detail="文章不存在")
+    await _log_audit(db, _actor(request), "delete_article", "article", None, slug)
     return {"ok": True}
 
 
@@ -492,6 +523,7 @@ async def delete_message(message_id: int, request: Request):
         if not urow or row["user_id"] is None or urow["id"] != row["user_id"]:
             raise HTTPException(status_code=403, detail="只能删除自己的留言")
     await db.prepare("DELETE FROM messages WHERE id = ?").bind(message_id).run()
+    await _log_audit(db, _actor(request), "delete_message", "message", message_id)
     return {"ok": True}
 
 
@@ -674,6 +706,7 @@ async def delete_comment(comment_id: int, request: Request):
         "SELECT c.id FROM comments c JOIN sub s ON c.parent_id = s.id"
         ") DELETE FROM comments WHERE id IN (SELECT id FROM sub)"
     ).bind(comment_id, comment_id).run()
+    await _log_audit(db, _actor(request), "delete_comment", "comment", comment_id)
     return {"ok": True}
 
 # ---------- AI 机器人（OpenCode Zen 免费模型） ----------
@@ -784,6 +817,17 @@ async def _get_setting(db, key: str, default: str) -> str:
 
 def _today_str() -> str:
     return datetime.now(SHANGHAI_TZ).strftime("%Y-%m-%d")
+
+
+def _actor(request: Request) -> str:
+    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    return parsed[0] if parsed else "?"
+
+
+async def _log_audit(db, actor: str, action: str, target_type: str = None, target_id=None, detail: str = "") -> None:
+    await db.prepare(
+        "INSERT INTO audit_log (actor, action, target_type, target_id, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(actor, action, target_type, target_id, str(detail)[:200], _now_iso()).run()
 
 @app.post("/api/chat")
 async def chat(body: ChatIn, request: Request):
@@ -1001,6 +1045,7 @@ async def ban_user(username: str, body: UserBanIn, request: Request):
     if not row:
         raise HTTPException(status_code=404, detail="用户不存在")
     await db.prepare("UPDATE users SET banned = ?, banned_until = NULL WHERE username = ?").bind(1 if body.banned else 0, username).run()
+    await _log_audit(db, _actor(request), "ban" if body.banned else "unban", "user", None, username)
     return {"ok": True, "username": username, "banned": body.banned}
 
 
@@ -1014,6 +1059,7 @@ async def set_user_role(username: str, body: UserRoleIn, request: Request):
     if not row:
         raise HTTPException(status_code=404, detail="用户不存在")
     await db.prepare("UPDATE users SET role = ? WHERE username = ?").bind(body.role, username).run()
+    await _log_audit(db, _actor(request), "set_role", "user", None, "%s -> %s" % (username, body.role))
     return {"ok": True, "username": username, "role": body.role}
 
 
@@ -1042,6 +1088,7 @@ async def delete_user(username: str, request: Request):
     await db.prepare("DELETE FROM users WHERE id = ?").bind(uid).run()
     await db.prepare("DELETE FROM user_chat_rate_limits WHERE user_id = ?").bind(uid).run()
     await db.prepare("DELETE FROM user_chat_daily_usage WHERE user_id = ?").bind(uid).run()
+    await _log_audit(db, _actor(request), "delete_user", "user", None, username)
     return {"ok": True, "username": username}
 # ---------- 举报（bot 自动审核） ----------
 
@@ -1120,6 +1167,125 @@ async def list_reports(request: Request):
         "SELECT id, target_type, target_id, reason, reporter, status, content, created_at FROM reports ORDER BY id DESC LIMIT 100"
     ).all()
     return {"reports": res.results}
+
+
+# ---------- 概览 / 导出 / 举报处理 / 审计 / 公告 ----------
+
+@app.get("/api/stats")
+async def stats(request: Request):
+    _check_admin(request)
+    db = _db(request)
+
+    async def one(sql, *args):
+        row = await db.prepare(sql).bind(*args).first()
+        return int(row["n"]) if row else 0
+
+    today = _today_str()
+    articles = await one("SELECT COUNT(*) n FROM articles")
+    drafts = await one("SELECT COUNT(*) n FROM articles WHERE status = 'draft'")
+    messages = await one("SELECT COUNT(*) n FROM messages")
+    comments = await one("SELECT COUNT(*) n FROM comments")
+    users = await one("SELECT COUNT(*) n FROM users")
+    reg_today = await one("SELECT COUNT(*) n FROM users WHERE substr(created_at,1,10) = ?", today)
+    msg_today = await one("SELECT COUNT(*) n FROM messages WHERE substr(created_at,1,10) = ?", today)
+    cmt_today = await one("SELECT COUNT(*) n FROM comments WHERE substr(created_at,1,10) = ?", today)
+    reports_open = await one("SELECT COUNT(*) n FROM reports WHERE status = 'open'")
+    bot_today = await one("SELECT COALESCE(SUM(count),0) n FROM user_chat_daily_usage WHERE date = ?", today)
+    return {
+        "articles": articles, "drafts": drafts,
+        "messages": messages, "comments": comments,
+        "users": users, "reg_today": reg_today,
+        "msg_today": msg_today, "cmt_today": cmt_today,
+        "reports_open": reports_open, "bot_today": bot_today,
+    }
+
+
+@app.get("/api/export/{etype}")
+async def export_data(etype: str, request: Request):
+    _check_admin(request)
+    db = _db(request)
+    if etype == "articles":
+        res = await db.prepare("SELECT slug, title, content_md, tags, status, views, created_at, updated_at FROM articles ORDER BY id").all()
+    elif etype == "messages":
+        res = await db.prepare("SELECT id, nickname, content, created_at, user_id FROM messages ORDER BY id").all()
+    elif etype == "comments":
+        res = await db.prepare("SELECT id, article_slug, nickname, content, created_at, user_id, parent_id, is_bot FROM comments ORDER BY id").all()
+    else:
+        raise HTTPException(status_code=400, detail="未知类型")
+    payload = json.dumps({"type": etype, "exported_at": _now_iso(), "data": res.results}, ensure_ascii=False)
+    return Response(
+        content=payload,
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="%s.json"' % etype},
+    )
+
+
+@app.post("/api/reports/{report_id}/resolve")
+async def resolve_report(report_id: int, body: ReportResolveIn, request: Request):
+    _check_moderator(request)
+    db = _db(request)
+    row = await db.prepare("SELECT id, target_type, target_id, status FROM reports WHERE id = ?").bind(report_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="举报不存在")
+    if body.action == "ignore":
+        await db.prepare("UPDATE reports SET status = 'handled' WHERE id = ?").bind(report_id).run()
+        await _log_audit(db, _actor(request), "ignore_report", "report", report_id, "%s:%s" % (row["target_type"], row["target_id"]))
+        return {"ok": True, "status": "ignored"}
+    # delete: 先查作者再删
+    target_user_id = None
+    if row["target_type"] == "comment":
+        t = await db.prepare("SELECT user_id FROM comments WHERE id = ?").bind(row["target_id"]).first()
+        if t:
+            target_user_id = t["user_id"]
+        await db.prepare(
+            "WITH RECURSIVE sub AS ("
+            "SELECT id FROM comments WHERE id = ? OR parent_id = ? "
+            "UNION "
+            "SELECT c.id FROM comments c JOIN sub s ON c.parent_id = s.id"
+            ") DELETE FROM comments WHERE id IN (SELECT id FROM sub)"
+        ).bind(row["target_id"], row["target_id"]).run()
+    else:
+        t = await db.prepare("SELECT user_id FROM messages WHERE id = ?").bind(row["target_id"]).first()
+        if t:
+            target_user_id = t["user_id"]
+        await db.prepare("DELETE FROM messages WHERE id = ?").bind(row["target_id"]).run()
+    banned = False
+    if body.ban and target_user_id:
+        author = await db.prepare("SELECT username, role FROM users WHERE id = ?").bind(target_user_id).first()
+        if author and author["role"] == "user":
+            await db.prepare("UPDATE users SET banned = 1, banned_until = NULL WHERE id = ?").bind(target_user_id).run()
+            banned = True
+    await db.prepare("UPDATE reports SET status = 'handled' WHERE id = ?").bind(report_id).run()
+    await _log_audit(db, _actor(request), "resolve_report", "report", report_id, "deleted%s" % ("+ban" if banned else ""))
+    return {"ok": True, "status": "deleted", "banned": banned}
+
+
+@app.get("/api/audit")
+async def list_audit(request: Request):
+    _check_admin(request)
+    res = await _db(request).prepare(
+        "SELECT id, actor, action, target_type, target_id, detail, created_at FROM audit_log ORDER BY id DESC LIMIT 200"
+    ).all()
+    return {"audit": res.results}
+
+
+@app.get("/api/announcement")
+async def get_announcement(request: Request):
+    raw = await _get_setting(_db(request), "announcement", "")
+    return {"text": raw}
+
+
+@app.put("/api/announcement")
+async def put_announcement(body: AnnouncementIn, request: Request):
+    _check_admin(request)
+    db = _db(request)
+    text = body.text.strip()
+    await db.prepare(
+        "INSERT INTO settings (key, value) VALUES ('announcement', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).bind(text).run()
+    await _log_audit(db, _actor(request), "set_announcement", "setting", None, text[:60])
+    return {"ok": True, "text": text}
 
 
 # ---------- RSS / Sitemap ----------
