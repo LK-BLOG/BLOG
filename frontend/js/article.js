@@ -37,15 +37,38 @@
 
   function esc(s) { return Blog.escapeHtml(s); }
 
+  var collapsed = {};
+
   function renderComments(list) {
     var depth = {};
-    list.forEach(function (m) { depth[m.id] = m.parent_id ? (depth[m.parent_id] || 0) + 1 : 0; });
+    var parentMap = {};
+    var childCount = {};
+    list.forEach(function (m) {
+      depth[m.id] = m.parent_id ? (depth[m.parent_id] || 0) + 1 : 0;
+      parentMap[m.id] = m.parent_id || 0;
+      if (m.parent_id) childCount[m.parent_id] = (childCount[m.parent_id] || 0) + 1;
+    });
+    function hiddenByCollapse(m) {
+      var p = parentMap[m.id];
+      var guard = 0;
+      while (p && guard < 20) {
+        if (collapsed[p]) return true;
+        p = parentMap[p] || 0;
+        guard++;
+      }
+      return false;
+    }
     var html = "";
     list.forEach(function (m) {
+      if (hiddenByCollapse(m)) return;
       var d = Math.min(depth[m.id] || 0, 5);
       var style = d ? "margin-left:" + (d * 28) + "px;" : "";
       var nickCls = m.is_bot ? 'style="color:#008080;font-weight:bold"' : "";
       var ops = "";
+      var kids = childCount[m.id] || 0;
+      if (kids) {
+        ops += "<button class='btn' data-toggle='" + m.id + "'>" + (collapsed[m.id] ? "▸ 展开" : "▾ 折叠") + " (" + kids + ")</button> ";
+      }
       ops += "<button class='btn' data-reply='" + m.id + "' data-nick='" + esc(m.nickname) + "'>回复</button> ";
       if (m.is_mine) {
         ops += "<button class='btn danger' data-del='" + m.id + "'>删除</button>";
@@ -59,6 +82,13 @@
         "</div>";
     });
     cmtList.innerHTML = html;
+    cmtList.querySelectorAll("[data-toggle]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.dataset.toggle;
+        collapsed[id] = !collapsed[id];
+        renderComments(list);
+      });
+    });
     cmtList.querySelectorAll("[data-reply]").forEach(function (b) {
       b.addEventListener("click", function () {
         replyingTo = { id: b.dataset.reply, nick: b.dataset.nick };
