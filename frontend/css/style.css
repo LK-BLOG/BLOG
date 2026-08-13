@@ -201,7 +201,7 @@ h1, h2, h3, h4 { font-weight: bold; }
   border: 1px solid var(--dark);
   box-shadow: inset 1px 1px 0 var(--hl);
 }
-.win-body { padding: 14px; }
+.win-body { padding: 14px; color: var(--text); }
 .win-body.flat { padding: 0; }
 
 /* ===== 区块 ===== */
