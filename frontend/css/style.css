@@ -129,7 +129,7 @@ h1, h2, h3, h4 { font-weight: bold; }
   letter-spacing: 6px;
   text-align: center;
   padding: 26px 12px 10px;
-  text-shadow: 1px 1px 0 rgba(0,0,0,.25);
+  text-shadow: none;
 }
 .hero-sub {
   text-align: center;
@@ -147,14 +147,14 @@ h1, h2, h3, h4 { font-weight: bold; }
 .desktop-icon {
   width: 84px;
   text-align: center;
-  color: #fff;
+  color: var(--text);
   text-decoration: none;
   font-size: 12px;
   padding: 6px 2px;
 }
 .desktop-icon:hover {
-  background: rgba(255,255,255,.18);
-  outline: 1px dotted #fff;
+  background: rgba(0,0,0,.08);
+  outline: 1px dotted var(--text);
   outline-offset: 2px;
 }
 .desktop-icon .icon96 {
@@ -169,7 +169,7 @@ h1, h2, h3, h4 { font-weight: bold; }
   border-color: var(--hl) var(--dark) var(--dark) var(--hl);
   box-shadow: 1px 1px 0 rgba(0,0,0,.4);
 }
-.desktop-icon:visited { color: #fff; }
+.desktop-icon:visited { color: var(--visited); }
 
 /* ===== 窗口 ===== */
 .win {
