@@ -61,11 +61,13 @@
     var html = "";
     list.forEach(function (m) {
       if (hiddenByCollapse(m)) return;
+      var kids = childCount[m.id] || 0;
+      // 有子回复的评论默认折叠（用户点击过的保持用户选择）
+      if (kids && !(m.id in collapsed)) collapsed[m.id] = true;
       var d = Math.min(depth[m.id] || 0, 5);
       var style = d ? "margin-left:" + (d * 28) + "px;" : "";
       var nickCls = m.is_bot ? 'style="color:#008080;font-weight:bold"' : "";
       var ops = "";
-      var kids = childCount[m.id] || 0;
       if (kids) {
         ops += "<button class='btn' data-toggle='" + m.id + "'>" + (collapsed[m.id] ? "▸ 展开" : "▾ 折叠") + " (" + kids + ")</button> ";
       }
