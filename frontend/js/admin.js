@@ -33,9 +33,27 @@
           ]
         }
       });
+      var Inline = Quill.import("blots/inline");
+      var PopupBtn = class extends Inline {
+        static create(value) {
+          var node = super.create();
+          node.classList.add("popup-btn");
+          node.setAttribute("data-msg", (value && value.msg) || "");
+          node.setAttribute("data-url", (value && value.url) || "");
+          node.textContent = (value && value.text) || "";
+          return node;
+        }
+        static value(node) {
+          return { text: node.textContent, msg: node.getAttribute("data-msg") || "", url: node.getAttribute("data-url") || "" };
+        }
+      };
+      PopupBtn.blotName = "popupBtn";
+      PopupBtn.tagName = "button";
+      PopupBtn.className = "popup-btn";
+      Quill.register(PopupBtn);
     }
     if (window.TurndownService) {
-      turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-" });
+      turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-", keep: ["button"] });
     }
     $("mode-rich").addEventListener("click", function () { setEditorMode("rich"); });
     $("mode-md").addEventListener("click", function () { setEditorMode("md"); });
@@ -108,7 +126,10 @@
       var msg = $("pb-msg").value.trim();
       var url = $("pb-url").value.trim();
       if (!text) { showAlert("pb-alert", "按钮文字不能为空"); return; }
-      if (type === "msg") {
+      if (window.Quill && quill && editorMode === "rich") {
+        var idx = quill.getSelection() ? quill.getSelection().index : quill.getLength();
+        quill.insertEmbed(idx, "popupBtn", { text: text, msg: type === "msg" ? msg : "", url: type === "url" ? url : "" }, "user");
+      } else if (type === "msg") {
         if (!msg) { showAlert("pb-alert", "弹窗内容不能为空"); return; }
         insertHtmlAtCursor('<button class="popup-btn" data-msg="' + Blog.escapeHtml(msg) + '">' + Blog.escapeHtml(text) + "</button>");
       } else {
