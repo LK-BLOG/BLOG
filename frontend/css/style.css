@@ -129,6 +129,7 @@ h1, h2, h3, h4 { font-weight: bold; }
   letter-spacing: 6px;
   text-align: center;
   padding: 26px 12px 10px;
+  color: var(--text);
   text-shadow: none;
 }
 .hero-sub {
