@@ -902,12 +902,12 @@ async def _call_bot(env, system_prompt: str, msgs: list) -> str:
     zen_key = getattr(env, "OPENCODE_ZEN_API_KEY", "")
     if zen_key:
         providers.append({"name": "OpenCode Zen", "url": "https://opencode.ai/zen/v1/chat/completions", "model": "deepseek-v4-flash-free", "key": zen_key})
-    agnes_key = getattr(env, "AGNES_API_KEY", "")
-    if agnes_key:
-        providers.append({"name": "Agnes", "url": "https://apihub.agnes-ai.com/v1/chat/completions", "model": "agnes-2.5-flash", "key": agnes_key})
     mimo_key = getattr(env, "MIMO_API_KEY", "")
     if mimo_key:
         providers.append({"name": "小米MiMo", "url": "https://api.xiaomimimo.com/v1/chat/completions", "model": "mimo-v2.5-pro", "key": mimo_key})
+    agnes_key = getattr(env, "AGNES_API_KEY", "")
+    if agnes_key:
+        providers.append({"name": "Agnes", "url": "https://apihub.agnes-ai.com/v1/chat/completions", "model": "agnes-2.5-flash", "key": agnes_key})
     if not providers:
         raise HTTPException(status_code=503, detail="机器人还没配置好，稍后再来")
     errors = []
@@ -1032,12 +1032,12 @@ async def chat(body: ChatIn, request: Request):
     zen_key = getattr(env, "OPENCODE_ZEN_API_KEY", "")
     if zen_key:
         providers.append({"name": "OpenCode Zen", "url": "https://opencode.ai/zen/v1/chat/completions", "model": "deepseek-v4-flash-free", "key": zen_key})
-    agnes_key = getattr(env, "AGNES_API_KEY", "")
-    if agnes_key:
-        providers.append({"name": "Agnes", "url": "https://apihub.agnes-ai.com/v1/chat/completions", "model": "agnes-2.5-flash", "key": agnes_key})
     mimo_key = getattr(env, "MIMO_API_KEY", "")
     if mimo_key:
         providers.append({"name": "小米MiMo", "url": "https://api.xiaomimimo.com/v1/chat/completions", "model": "mimo-v2.5-pro", "key": mimo_key})
+    agnes_key = getattr(env, "AGNES_API_KEY", "")
+    if agnes_key:
+        providers.append({"name": "Agnes", "url": "https://apihub.agnes-ai.com/v1/chat/completions", "model": "agnes-2.5-flash", "key": agnes_key})
     if not providers:
         raise HTTPException(status_code=503, detail="机器人还没配置好，稍后再来")
 
