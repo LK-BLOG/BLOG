@@ -3,6 +3,7 @@
 # Python Worker (FastAPI) + Cloudflare D1
 # 路由前缀统一 /api/*
 # ============================================================
+import asyncio
 import base64
 import html
 import hashlib
@@ -738,7 +739,16 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
         prompt = base + (
             "用户在文章评论区说话，下面是当前文章和这段对话的上下文（用户与机器人）。"
             "当前文章《%s》：\n%s\n请结合上下文回答用户最后一条消息；如果用户要求分析文章，就基于文章内容分析。"
-        ) % (article["title"], str(article["content_md"])[:2000])
+        ) % (article["title"], _clean_md_imgs(str(article["content_md"])[:3000]))
+        base_url = str(request.base_url).rstrip("/")
+        images = []
+        for u in _extract_img_urls(str(article["content_md"])):
+            du = await _img_to_data_url(u, base_url)
+            if du:
+                images.append({"type": "image_url", "image_url": {"url": du}})
+        if images:
+            last = chain[-1]
+            chain[-1] = {"role": "user", "content": [{"type": "text", "text": last["content"]}] + images}
         reply = await _call_bot(env, prompt, chain[-10:])
         r1 = await db.prepare(
             "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, ?, ?, 0)"
@@ -880,16 +890,77 @@ def _has_violation_signal(msgs: list) -> bool:
     return False
 
 
+def _extract_img_urls(md):
+    urls = []
+    for m in re.finditer(r"!\[[^\]]*\]\(([^)\s]+)\)", md or ""):
+        urls.append(m.group(1))
+    for m in re.finditer(r"<img[^>]*>", md or ""):
+        sm = re.search(r"src=([\"'])(.*?)\1", m.group(0))
+        if sm:
+            urls.append(sm.group(2))
+        urls.append(m.group(1))
+    seen, out = set(), []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out[:3]
+
+
+def _clean_md_imgs(md):
+    s = md or ""
+    s = re.sub(r"!\[[^\]]*\]\([^)]*\)", "[\u56fe\u7247]", s)
+    s = re.sub(r"<img[^>]*>", "[\u56fe\u7247]", s)
+    return s
+
+
+async def _img_to_data_url(url: str, base: str):
+    from workers import fetch
+    try:
+        full = base + url if url.startswith("/") else url
+        resp = await fetch(
+            full,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"},
+        )
+        if resp.status != 200:
+            return None
+        raw = await resp.bytes()
+        if len(raw) > 2 * 1024 * 1024:
+            return None
+        b64 = base64.b64encode(raw).decode("ascii")
+        path0 = url.split("?")[0]
+        ext = path0.rsplit(".", 1)[-1].lower() if "." in path0 else ""
+        mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "svg": "image/svg+xml"}.get(ext, "image/png")
+        return "data:%s;base64,%s" % (mime, b64)
+    except Exception:
+        return None
+
+
+def _strip_img_content(msg):
+    c = msg.get("content")
+    if isinstance(c, list):
+        parts = [x.get("text", "") for x in c if isinstance(x, dict) and x.get("type") == "text"]
+        has_img = any(isinstance(x, dict) and x.get("type") == "image_url" for x in c)
+        txt = "".join(parts).strip()
+        if has_img:
+            txt = (txt + " [\u56fe\u7247]") if txt else "[\u56fe\u7247]"
+        c = txt
+    return {"role": msg.get("role", "user"), "content": c}
+
+
 async def _post_chat(provider: dict, payload: dict):
     from workers import fetch
-    return await fetch(
-        provider["url"],
-        method="POST",
-        headers={
-            "Authorization": "Bearer " + provider["key"],
-            "Content-Type": "application/json",
-        },
-        body=json.dumps(payload),
+    return await asyncio.wait_for(
+        fetch(
+            provider["url"],
+            method="POST",
+            headers={
+                "Authorization": "Bearer " + provider["key"],
+                "Content-Type": "application/json",
+            },
+            body=json.dumps(payload),
+        ),
+        timeout=25,
     )
 
 
@@ -913,9 +984,12 @@ async def _call_bot(env, system_prompt: str, msgs: list) -> str:
     errors = []
     for p in providers:
         prompt = system_prompt + "\n" + "你当前由「%s」的模型 %s 驱动；如果用户问你的模型身份，就如实回答这个。" % (p["name"], p["model"])
+        loop_msgs = msgs
+        if p["name"] == "OpenCode Zen":
+            loop_msgs = [_strip_img_content(m) for m in msgs]
         payload = {
             "model": p["model"],
-            "messages": [{"role": "system", "content": prompt}] + msgs,
+            "messages": [{"role": "system", "content": prompt}] + loop_msgs,
             "max_tokens": 800,
             "temperature": 0.7,
         }
@@ -1046,9 +1120,12 @@ async def chat(body: ChatIn, request: Request):
     errors = []
     for p in providers:
         prompt = system_prompt + "\n" + "你当前由「%s」的模型 %s 驱动；如果用户问你的模型身份，就如实回答这个。" % (p["name"], p["model"])
+        loop_msgs = msgs
+        if p["name"] == "OpenCode Zen":
+            loop_msgs = [_strip_img_content(m) for m in msgs]
         payload = {
             "model": p["model"],
-            "messages": [{"role": "system", "content": prompt}] + msgs,
+            "messages": [{"role": "system", "content": prompt}] + loop_msgs,
             "max_tokens": 800,
             "temperature": 0.7,
         }
