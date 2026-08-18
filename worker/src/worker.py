@@ -740,7 +740,9 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
             "用户在文章评论区说话，下面是当前文章和这段对话的上下文（用户与机器人）。"
             "当前文章《%s》：\n%s\n请结合上下文回答用户最后一条消息；如果用户要求分析文章，就基于文章内容分析。"
         ) % (article["title"], _clean_md_imgs(str(article["content_md"])[:3000]))
-        base_url = str(request.base_url).rstrip("/")
+        _host = request.headers.get("host") or ""
+        _scheme = request.headers.get("x-forwarded-proto") or "https"
+        base_url = (_scheme + "://" + _host) if _host else "https://xiaokan-api.gunmu1145.workers.dev"
         print("BOTIMG base=", base_url, "urls=", _extract_img_urls(str(article["content_md"])), "imgs=", len(images))
         images = []
         for u in _extract_img_urls(str(article["content_md"])):
