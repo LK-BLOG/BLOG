@@ -743,7 +743,6 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
         _host = request.headers.get("host") or ""
         _scheme = request.headers.get("x-forwarded-proto") or "https"
         base_url = (_scheme + "://" + _host) if _host else "https://xiaokan-api.gunmu1145.workers.dev"
-        print("BOTIMG base=", base_url, "urls=", _extract_img_urls(str(article["content_md"])), "imgs=", len(images))
         images = []
         for u in _extract_img_urls(str(article["content_md"])):
             du = await _img_to_data_url(u, base_url)
