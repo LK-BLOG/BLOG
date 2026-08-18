@@ -990,40 +990,52 @@ async def _call_bot(env, system_prompt: str, msgs: list) -> str:
     has_img = any(isinstance(m.get("content"), list) for m in msgs)
     if has_img:
         providers.sort(key=lambda p: 0 if p["name"] != "OpenCode Zen" else 1)
-    errors = []
-    for p in providers:
-        prompt = system_prompt + "\n" + "你当前由「%s」的模型 %s 驱动；如果用户问你的模型身份，就如实回答这个。" % (p["name"], p["model"])
-        loop_msgs = msgs
-        if p["name"] == "OpenCode Zen":
-            loop_msgs = [_strip_img_content(m) for m in msgs]
-        payload = {
-            "model": p["model"],
-            "messages": [{"role": "system", "content": prompt}] + loop_msgs,
-            "max_tokens": 800,
-            "temperature": 0.7,
-        }
-        if p["name"] == "Agnes":
-            payload["reasoning_effort"] = "high"
+    async def _try_provider(p):
         try:
+            prompt = system_prompt + "\n" + "你当前由「%s」的模型 %s 驱动；如果用户问你的模型身份，就如实回答这个。" % (p["name"], p["model"])
+            loop_msgs = msgs
+            if p["name"] == "OpenCode Zen":
+                loop_msgs = [_strip_img_content(m) for m in msgs]
+            payload = {
+                "model": p["model"],
+                "messages": [{"role": "system", "content": prompt}] + loop_msgs,
+                "max_tokens": 800,
+                "temperature": 0.7,
+            }
+            if p["name"] == "Agnes":
+                payload["reasoning_effort"] = "high"
             resp = await _post_chat(p, payload)
+            if resp.status != 200:
+                text = await resp.text()
+                return p["name"], "", text[:80]
+            data = json.loads(await resp.text())
+            choices = data.get("choices") or []
+            if not choices:
+                return p["name"], "", "没回复"
+            msg = choices[0].get("message") or {}
+            reply = (msg.get("content") or msg.get("reasoning_content") or "").strip()
+            return p["name"], reply, ""
         except Exception:
-            errors.append(p["name"] + "：连接失败")
-            continue
-        if resp.status != 200:
-            text = await resp.text()
-            errors.append(p["name"] + "：" + text[:80])
-            continue
-        data = json.loads(await resp.text())
-        choices = data.get("choices") or []
-        if not choices:
-            errors.append(p["name"] + "：没回复")
-            continue
-        msg = choices[0].get("message") or {}
-        reply = (msg.get("content") or msg.get("reasoning_content") or "").strip()
-        if reply:
-            return reply
-        errors.append(p["name"] + "：空回复")
-    raise HTTPException(status_code=502, detail="机器人全线开小差了：" + "；".join(errors) + "，等会儿再试")
+            return p["name"], "", "连接失败"
+
+    tasks = {asyncio.ensure_future(_try_provider(p)): p for p in providers}
+    errors = []
+    while tasks:
+        done, pending = await asyncio.wait(list(tasks), return_when=asyncio.FIRST_COMPLETED, timeout=30)
+        if not done:
+            break
+        for t in done:
+            name, reply, err = t.result()
+            if reply:
+                for pt in pending:
+                    pt.cancel()
+                return reply
+            if err:
+                errors.append(name + "?" + err)
+            del tasks[t]
+    if errors:
+        raise HTTPException(status_code=502, detail="机器人全线开小差了：" + "?".join(errors) + "，等会儿再试")
+    raise HTTPException(status_code=502, detail="机器人全线开小差了，等会儿再试")
 
 
 async def _get_setting(db, key: str, default: str) -> str:
