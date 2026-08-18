@@ -741,6 +741,7 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
             "当前文章《%s》：\n%s\n请结合上下文回答用户最后一条消息；如果用户要求分析文章，就基于文章内容分析。"
         ) % (article["title"], _clean_md_imgs(str(article["content_md"])[:3000]))
         base_url = str(request.base_url).rstrip("/")
+        print("BOTIMG base=", base_url, "urls=", _extract_img_urls(str(article["content_md"])), "imgs=", len(images))
         images = []
         for u in _extract_img_urls(str(article["content_md"])):
             du = await _img_to_data_url(u, base_url)
@@ -749,6 +750,7 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
         if images:
             last = chain[-1]
             chain[-1] = {"role": "user", "content": [{"type": "text", "text": last["content"]}] + images}
+        print("BOTIMG final images=", len(images), "chain_last=", str(chain[-1])[:200])
         reply = await _call_bot(env, prompt, chain[-10:])
         r1 = await db.prepare(
             "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, ?, ?, 0)"
