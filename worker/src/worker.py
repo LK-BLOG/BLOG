@@ -740,12 +740,9 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
             "用户在文章评论区说话，下面是当前文章和这段对话的上下文（用户与机器人）。"
             "当前文章《%s》：\n%s\n请结合上下文回答用户最后一条消息；如果用户要求分析文章，就基于文章内容分析。"
         ) % (article["title"], _clean_md_imgs(str(article["content_md"])[:3000]))
-        _host = request.headers.get("host") or ""
-        _scheme = request.headers.get("x-forwarded-proto") or "https"
-        base_url = (_scheme + "://" + _host) if _host else "https://xiaokan-api.gunmu1145.workers.dev"
         images = []
         for u in _extract_img_urls(str(article["content_md"])):
-            du = await _img_to_data_url(u, base_url)
+            du = await _img_to_data_url(env, u)
             if du:
                 images.append({"type": "image_url", "image_url": {"url": du}})
         if images:
@@ -917,22 +914,29 @@ def _clean_md_imgs(md):
     return s
 
 
-async def _img_to_data_url(url: str, base: str):
-    from workers import fetch
+async def _img_to_data_url(env, url: str):
     try:
-        full = base + url if url.startswith("/") else url
-        resp = await fetch(
-            full,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"},
-        )
-        if resp.status != 200:
-            return None
-        raw = await resp.bytes()
+        if "/api/media/" in url:
+            key = url.split("/api/media/", 1)[1]
+            obj = await env.XIAOKAN_MEDIA.get(key, "arrayBuffer")
+            if obj is None:
+                return None
+            from js import Uint8Array
+            raw = bytes(Uint8Array.new(obj).to_py())
+        else:
+            from workers import fetch
+            resp = await fetch(
+                url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36"},
+            )
+            if resp.status != 200:
+                return None
+            raw = await resp.bytes()
         if len(raw) > 2 * 1024 * 1024:
             return None
         b64 = base64.b64encode(raw).decode("ascii")
-        path0 = url.split("?")[0]
-        ext = path0.rsplit(".", 1)[-1].lower() if "." in path0 else ""
+        path = url.split("?")[0]
+        ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
         mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "svg": "image/svg+xml"}.get(ext, "image/png")
         return "data:%s;base64,%s" % (mime, b64)
     except Exception:
