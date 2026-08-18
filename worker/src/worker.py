@@ -981,6 +981,9 @@ async def _call_bot(env, system_prompt: str, msgs: list) -> str:
         providers.append({"name": "Agnes", "url": "https://apihub.agnes-ai.com/v1/chat/completions", "model": "agnes-2.5-flash", "key": agnes_key})
     if not providers:
         raise HTTPException(status_code=503, detail="机器人还没配置好，稍后再来")
+    has_img = any(isinstance(m.get("content"), list) for m in msgs)
+    if has_img:
+        providers.sort(key=lambda p: 0 if p["name"] != "OpenCode Zen" else 1)
     errors = []
     for p in providers:
         prompt = system_prompt + "\n" + "你当前由「%s」的模型 %s 驱动；如果用户问你的模型身份，就如实回答这个。" % (p["name"], p["model"])
@@ -1116,6 +1119,9 @@ async def chat(body: ChatIn, request: Request):
         providers.append({"name": "Agnes", "url": "https://apihub.agnes-ai.com/v1/chat/completions", "model": "agnes-2.5-flash", "key": agnes_key})
     if not providers:
         raise HTTPException(status_code=503, detail="机器人还没配置好，稍后再来")
+    has_img = any(isinstance(m.get("content"), list) for m in msgs)
+    if has_img:
+        providers.sort(key=lambda p: 0 if p["name"] != "OpenCode Zen" else 1)
 
     errors = []
     for p in providers:
