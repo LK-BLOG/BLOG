@@ -20,12 +20,22 @@ import urllib.error
 import urllib.request
 
 
-DEFAULT_API = "https://xiaokan-api.gunmu1145.workers.dev"
+DEFAULT_API = "https://xiaokan-esn.pages.dev"
+
+BROWSER_HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/126.0.0.0 Safari/537.36"
+    ),
+}
 
 
 def api_request(base, path, method="GET", payload=None, token=""):
     data = None
-    headers = {"Accept": "application/json"}
+    headers = dict(BROWSER_HEADERS)
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
