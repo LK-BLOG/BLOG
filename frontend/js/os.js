@@ -13,6 +13,9 @@
     { id: "chat", title: "机器人", icon: "🤖", special: "chat" },
     { id: "admin", title: "管理", icon: "⚙", url: "admin.html" }
   ];
+  var HIDDEN_APPS = [
+    { id: "login", title: "登录 / 注册", icon: "🔑", url: "login.html" }
+  ];
 
   var shell = null;
   var desktop = null;
@@ -32,8 +35,13 @@
   }
 
   function appById(id) {
-    for (var i = 0; i < APPS.length; i++) if (APPS[i].id === id) return APPS[i];
+    var all = APPS.concat(HIDDEN_APPS);
+    for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
     return null;
+  }
+
+  function embedUrl(url) {
+    return url + (url.indexOf("?") === -1 ? "?" : "&") + "embed=1";
   }
 
   function buildShell() {
@@ -71,6 +79,7 @@
               '<button type="button" data-os-open="articles">📄 文章</button>' +
               '<button type="button" data-os-open="guestbook">💬 留言板</button>' +
               '<button type="button" data-os-open="chat">🤖 机器人</button>' +
+              '<button type="button" data-os-open="login">🔑 登录 / 注册</button>' +
               '<button type="button" data-os-open="admin">⚙ 管理</button>' +
             '</div>' +
           '</div>' +
@@ -115,23 +124,27 @@
       var icon = make("button", "os-icon", '<span class="os-icon-img">' + app.icon + '</span><span>' + app.title + '</span>');
       icon.type = "button";
       icon.dataset.app = app.id;
-      icon.addEventListener("click", function (e) {
-        e.stopPropagation();
-        selectIcon(icon);
-        if (coarsePointer) openApp(app.id);
-      });
-      icon.addEventListener("dblclick", function (e) { e.stopPropagation(); openApp(app.id); });
+      icon.title = "双击打开";
+      bindIcon(icon, function () { openApp(app.id); });
       box.appendChild(icon);
     });
     var bin = make("button", "os-icon", '<span class="os-icon-img">🗑</span><span>回收站</span>');
     bin.type = "button";
-    bin.addEventListener("click", function (e) {
-      e.stopPropagation();
-      selectIcon(bin);
-      if (coarsePointer) openSpecial("bin", "回收站", '<div class="os-empty">回收站是空的。</div>');
-    });
-    bin.addEventListener("dblclick", function () { openSpecial("bin", "回收站", '<div class="os-empty">回收站是空的。</div>'); });
+    bin.title = "双击打开";
+    bindIcon(bin, function () { openSpecial("bin", "回收站", '<div class="os-empty">回收站是空的。</div>'); });
     box.appendChild(bin);
+  }
+
+  function bindIcon(icon, open) {
+    var lastClick = 0;
+    icon.addEventListener("click", function (e) {
+      e.stopPropagation();
+      selectIcon(icon);
+      if (coarsePointer) { open(); return; }
+      var now = Date.now();
+      if (now - lastClick <= 500) { lastClick = 0; open(); }
+      else { lastClick = now; }
+    });
   }
 
   function selectIcon(icon) {
@@ -301,6 +314,11 @@
     }
     var win = make("div", "os-window");
     win.dataset.app = id;
+    var url = app.url;
+    if (app.id === "login") {
+      var next = new URLSearchParams(location.search).get("next") || "index.html";
+      url = "login.html?next=" + encodeURIComponent(next);
+    }
     win.innerHTML =
       '<div class="os-titlebar">' +
         '<div class="os-titlebar-text"><span>' + app.icon + '</span><span>' + app.title + '</span></div>' +
@@ -310,7 +328,7 @@
           '<button type="button" class="os-win-close" title="关闭">✕</button>' +
         '</div>' +
       '</div>' +
-      '<div class="os-window-content"><iframe src="' + app.url + '?embed=1" title="' + app.title + '"></iframe></div>';
+      '<div class="os-window-content"><iframe src="' + embedUrl(url) + '" title="' + app.title + '"></iframe></div>';
     windowsBox.appendChild(win);
     placeWindow(win);
     bindWindow(win);
@@ -443,6 +461,11 @@
       setTheme("os");
       var openAppId = new URLSearchParams(location.search).get("open");
       if (openAppId) setTimeout(function () { openApp(openAppId); }, 1000);
+      var currentFile = (location.pathname.split("/").pop() || "index.html").toLowerCase();
+      var currentApp = APPS.concat(HIDDEN_APPS).filter(function (app) { return app.url === currentFile; })[0];
+      if (!openAppId && currentApp && currentFile !== "index.html") {
+        setTimeout(function () { openApp(currentApp.id); }, 1000);
+      }
     }
     window.XiaokanOS = { setTheme: setTheme, openApp: openApp };
   }
