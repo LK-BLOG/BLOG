@@ -369,6 +369,7 @@ class RegisterIn(BaseModel):
     username: str = Field(min_length=1, max_length=20)
     password: str = Field(min_length=1, max_length=200)
     display_name: str = Field(min_length=1, max_length=30)
+    email: str = Field(min_length=3, max_length=254)
 
 
 class ArticleIn(BaseModel):
@@ -558,10 +559,16 @@ async def register(body: RegisterIn, request: Request):
     display_name = body.display_name.strip()
     if not display_name:
         raise HTTPException(status_code=400, detail="请填写显示名称")
+    email = _normalize_email(body.email)
+    if not _valid_email(email):
+        raise HTTPException(status_code=400, detail="邮箱格式不对")
     db = _db(request)
     dup = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
     if dup:
         raise HTTPException(status_code=409, detail="用户名已被占用")
+    dup_email = await db.prepare("SELECT id FROM users WHERE email = ? COLLATE NOCASE").bind(email).first()
+    if dup_email:
+        raise HTTPException(status_code=409, detail="邮箱已被占用")
     ip = _client_ip(request)
     now_ts = int(time.time())
     today = _today_str()
@@ -591,9 +598,17 @@ async def register(body: RegisterIn, request: Request):
         "THEN register_daily_limits.count + 1 ELSE 1 END, date = excluded.date"
     ).bind(ip, today).run()
     await db.prepare(
-        "INSERT INTO users (username, password_hash, role, display_name, created_at) VALUES (?, ?, 'user', ?, ?)"
-    ).bind(username, _hash_password(body.password), display_name, _now_iso()).run()
-    return {"token": _make_token(username, "user", request.scope["env"]), "username": username, "role": "user", "display_name": display_name}
+        "INSERT INTO users (username, password_hash, role, display_name, email, email_verified, created_at) "
+        "VALUES (?, ?, 'user', ?, ?, 0, ?)"
+    ).bind(username, _hash_password(body.password), display_name, email, _now_iso()).run()
+    return {
+        "token": _make_token(username, "user", request.scope["env"]),
+        "username": username,
+        "role": "user",
+        "display_name": display_name,
+        "email": email,
+        "email_verified": False,
+    }
 
 
 @app.get("/api/me")

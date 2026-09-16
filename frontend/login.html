@@ -72,6 +72,10 @@
               <input class="field" type="text" id="r-name" maxlength="30" required>
             </div>
             <div class="form-row">
+              <label for="r-email">邮箱 <span class="hint">用于验证账号和找回密码</span></label>
+              <input class="field" type="email" id="r-email" maxlength="254" autocomplete="email" required>
+            </div>
+            <div class="form-row">
               <label for="r-password">密码 <span class="hint">6-72 位</span></label>
               <input class="field" type="password" id="r-password" maxlength="72" autocomplete="new-password" required>
             </div>
@@ -80,6 +84,18 @@
               <input class="field" type="password" id="r-password2" maxlength="72" autocomplete="new-password" required>
             </div>
             <button type="submit" class="btn primary" style="width:100%">注册并登录</button>
+          </form>
+
+          <form id="verify-form" class="hidden">
+            <p class="muted mb8">验证码已发送到 <strong id="verify-email"></strong>，填下面完成注册。</p>
+            <div id="verify-alert"></div>
+            <div class="form-row">
+              <label for="v-code">邮箱验证码</label>
+              <input class="field" id="v-code" inputmode="numeric" maxlength="6" placeholder="6 位数字" required>
+            </div>
+            <button type="submit" class="btn primary" style="width:100%">验证并完成注册</button>
+            <div class="mt8"><button type="button" class="btn" id="v-resend">重新发送验证码</button></div>
+            <div class="login-switch"><a id="verify-goto-login">返回登录</a></div>
           </form>
 
           <div class="login-switch hidden" id="register-switch"><a id="goto-login">已有账号？去登录</a></div>
@@ -96,6 +112,7 @@
     "use strict";
     var $ = function (id) { return document.getElementById(id); };
     var next = new URLSearchParams(location.search).get("next") || "index.html";
+    var pendingEmail = "";
 
     function show(msg, type) {
       $("login-alert").innerHTML = '<div class="alert ' + (type || "error") + '">' + Blog.escapeHtml(msg) + "</div>";
@@ -103,13 +120,23 @@
     function setMode(register) {
       $("login-form").classList.toggle("hidden", register);
       $("register-form").classList.toggle("hidden", !register);
+      $("verify-form").classList.add("hidden");
       $("goto-register").parentElement.classList.toggle("hidden", register);
       $("register-switch").classList.toggle("hidden", !register);
     }
-    function finish(data) {
+    function saveAuth(data) {
       Blog.setToken(data.token);
       Blog.setUser(data.username, data.role, data.display_name);
+    }
+    function finish(data) {
+      saveAuth(data);
       location.href = next;
+    }
+    function sendRegisterCode(email) {
+      $("verify-alert").innerHTML = "";
+      Blog.api("/api/me/email/code", { method: "POST", body: { email: email } })
+        .then(function () { $("verify-alert").innerHTML = '<div class="alert ok">验证码已发送，查收邮箱。</div>'; })
+        .catch(function (err) { $("verify-alert").innerHTML = '<div class="alert error">' + Blog.escapeHtml(err.message || "发送失败") + "</div>"; });
     }
 
     $("goto-register").addEventListener("click", function () { setMode(true); });
@@ -119,6 +146,7 @@
       form.classList.toggle("hidden", !show);
       $("login-form").classList.toggle("hidden", show);
       $("register-form").classList.add("hidden");
+      $("verify-form").classList.add("hidden");
       $("goto-register").parentElement.classList.toggle("hidden", show);
       $("register-switch").classList.add("hidden");
     });
@@ -168,15 +196,44 @@
       var u = $("r-username").value.trim();
       var p = $("r-password").value;
       var n = $("r-name").value.trim();
+      var email = $("r-email").value.trim();
       if (p !== $("r-password2").value) { show("两次密码不一致"); return; }
       if (!n) { show("请填写显示名称"); return; }
+      if (!email) { show("请填写邮箱"); return; }
       var btn = this.querySelector("button");
       btn.disabled = true;
-      Blog.api("/api/register", { method: "POST", body: { username: u, password: p, display_name: n } })
-        .then(finish)
+      Blog.api("/api/register", { method: "POST", body: { username: u, password: p, display_name: n, email: email } })
+        .then(function (data) {
+          saveAuth(data);
+          pendingEmail = data.email || email;
+          $("verify-email").textContent = pendingEmail;
+          $("login-form").classList.add("hidden");
+          $("register-form").classList.add("hidden");
+          $("verify-form").classList.remove("hidden");
+          $("goto-register").parentElement.classList.add("hidden");
+          $("register-switch").classList.add("hidden");
+          sendRegisterCode(pendingEmail);
+        })
         .catch(function (err) { show(err.message || "注册失败"); })
         .finally(function () { btn.disabled = false; });
     });
+
+    $("verify-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var code = $("v-code").value.trim();
+      if (!code) { return; }
+      var btn = this.querySelector("button[type='submit']");
+      btn.disabled = true;
+      Blog.api("/api/me/email/verify", { method: "POST", body: { email: pendingEmail, code: code } })
+        .then(function () { location.href = next; })
+        .catch(function (err) { $("verify-alert").innerHTML = '<div class="alert error">' + Blog.escapeHtml(err.message || "验证失败") + "</div>"; })
+        .finally(function () { btn.disabled = false; });
+    });
+
+    $("v-resend").addEventListener("click", function () {
+      if (pendingEmail) sendRegisterCode(pendingEmail);
+    });
+    $("verify-goto-login").addEventListener("click", function () { setMode(false); });
   })();
   </script>
 </body>
