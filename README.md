@@ -147,6 +147,23 @@ python tools/email_bridge.py --yes
 
 `--yes` 就是你对本次发信的明确确认。没加时脚本只列队列，不发送。
 
+### Gmail 云端发信（电脑不开也能发）
+
+推荐专门注册一个博客 Gmail，不要用个人邮箱。然后：
+
+1. 打开 `https://script.google.com`，新建项目。
+2. 把 `tools/gmail_apps_script.js` 的内容粘进去，改掉 `SECRET`。
+3. 部署 → 新部署 → Web 应用；执行身份选“我”，访问权限选“任何人”。
+4. 复制 Web 应用 URL。
+5. 线上配置两个 secret：
+
+```powershell
+npx wrangler secret put GMAIL_SCRIPT_URL
+npx wrangler secret put GMAIL_SCRIPT_TOKEN
+```
+
+配置后 Worker 会直接通过 Gmail 发信；没配置时才走本地 `email_outbox`。
+
 ### Windows 后台自动发信（推荐）
 
 只配一次，之后每分钟自动查队列，不用手动跑：

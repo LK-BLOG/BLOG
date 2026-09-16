@@ -1,3 +1,5 @@
 # 本地开发用：复制本文件为 .dev.vars 并填写密码（.dev.vars 已被 git 忽略）
 ADMIN_PASSWORD=你的密码
 EMAIL_CODE_SECRET=随便一串够长的随机密钥
+GMAIL_SCRIPT_URL=粘贴 Apps Script Web 应用 URL
+GMAIL_SCRIPT_TOKEN=粘贴 Apps Script 里的 SECRET

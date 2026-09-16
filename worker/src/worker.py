@@ -179,11 +179,49 @@ async def _email_send_allowed(db, key: str) -> None:
     ).bind(key, now).run()
 
 
-async def _queue_email(db, to_email: str, subject: str, body: str) -> None:
+async def _send_email_via_gmail_script(env, to_email: str, subject: str, body: str) -> bool:
+    url = str(getattr(env, "GMAIL_SCRIPT_URL", "") or "")
+    token = str(getattr(env, "GMAIL_SCRIPT_TOKEN", "") or "")
+    if not url or not token:
+        return False
+    from workers import fetch
+    resp = await fetch(
+        url,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+        body=json.dumps({
+            "token": token,
+            "to": to_email,
+            "subject": subject,
+            "body": body,
+            "from_name": "小戡的博客",
+        }, ensure_ascii=False),
+    )
+    text = await resp.text()
+    if resp.status != 200:
+        raise HTTPException(status_code=502, detail="Gmail 脚本返回 HTTP %d：%s" % (resp.status, text[:120]))
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=502, detail="Gmail 脚本返回格式错误")
+    if not data.get("ok"):
+        raise HTTPException(status_code=502, detail="Gmail 脚本发送失败：" + str(data.get("error") or "")[:120])
+    return True
+
+
+async def _queue_email(db, env, to_email: str, subject: str, body: str) -> None:
+    try:
+        sent = await _send_email_via_gmail_script(env, to_email, subject, body)
+    except HTTPException as exc:
+        await db.prepare(
+            "INSERT INTO email_outbox (to_email, subject, body, status, error, created_at) "
+            "VALUES (?, ?, ?, 'failed', ?, ?)"
+        ).bind(to_email, subject, body, str(exc.detail)[:500], _now_iso()).run()
+        raise
     await db.prepare(
-        "INSERT INTO email_outbox (to_email, subject, body, status, created_at) "
-        "VALUES (?, ?, ?, 'pending', ?)"
-    ).bind(to_email, subject, body, _now_iso()).run()
+        "INSERT INTO email_outbox (to_email, subject, body, status, created_at, sent_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(to_email, subject, body, "sent" if sent else "pending", _now_iso(), _now_iso() if sent else None).run()
 
 
 async def _create_email_verification(db, env, user_id: int, email: str, purpose: str) -> None:
@@ -221,7 +259,7 @@ async def _create_email_verification(db, env, user_id: int, email: str, purpose:
     else:
         subject = "重置密码验证码 - 小戡的博客"
         body = "你正在重置密码。\n\n验证码：%s\n\n10 分钟内有效，别给别人。" % code
-    await _queue_email(db, email, subject, body)
+    await _queue_email(db, env, email, subject, body)
 
 
 async def _verify_email_code(db, env, user_id: int, email: str, purpose: str, code: str) -> bool:
