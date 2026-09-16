@@ -74,9 +74,9 @@
 
   // 管理后台保存的站点内容，存在对应容器时自动渲染
   function loadSiteContent() {
-    if (!document.getElementById("site-friends-list") && !document.getElementById("site-projects-list") && !document.getElementById("site-social-list") && !document.getElementById("site-bio")) return;
+    if (!document.getElementById("site-friends-list") && !document.getElementById("site-skills-list") && !document.getElementById("site-projects-list") && !document.getElementById("site-social-list") && !document.getElementById("site-bio")) return;
     api("/api/site-content").then(function (d) {
-      var bio = document.getElementById("site-bio"); if (bio && d.bio) bio.textContent = d.bio;
+      var bio = document.getElementById("site-bio"); if (bio) bio.textContent = d.bio || "还没有简介，去后台写。";
       function render(id, items, emptyText) {
         var box = document.getElementById(id);
         if (!box) return;
@@ -86,9 +86,10 @@
         }
         box.innerHTML = items.map(function (x) { return '<div class="win"><div class="win-title"><span class="win-label">' + escapeHtml(x.name || "未命名") + '</span></div><div class="win-body"><p>' + escapeHtml(x.desc || "") + '</p>' + (x.url ? '<p class="mt8"><a class="btn" href="' + escapeHtml(x.url) + '" target="_blank" rel="noopener">打开 ↗</a></p>' : '') + '</div></div>'; }).join("");
       }
+      render("site-skills-list", d.skills, "后台还没加技能。");
       render("site-friends-list", d.friends, "还没有友链。想交换友链？留言板吱一声。");
-      render("site-projects-list", d.projects);
-      render("site-social-list", d.social);
+      render("site-projects-list", d.projects, "后台还没加项目。");
+      render("site-social-list", d.social, "后台还没加社交平台。");
     }).catch(function () {});
   }
 

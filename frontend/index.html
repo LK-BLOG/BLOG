@@ -65,9 +65,7 @@
         <legend>关于我</legend>
         <div class="win">
           <div class="win-body">
-            <p>嗨，我是 <strong>小戡</strong>（骆戡），一个爱折腾的网络冲浪选手。</p>
-            <p class="mt8">B 站 ID：<strong>玩Flip的刀盾</strong> · GitHub：<strong>骆戡Campus</strong>。</p>
-            <p class="mt8">这里是我 90 年代风格的网络小窝：写点文章、放点项目、摆个留言板，欢迎来串门。</p>
+            <p id="site-bio" class="bio-text"></p>
           </div>
         </div>
       </fieldset>
@@ -78,28 +76,7 @@
       <fieldset>
         <legend>技能</legend>
         <p class="sec-intro">会一点，都在学，永远在路上。</p>
-        <div class="grid" id="site-projects-list">
-          <div class="win">
-            <div class="win-title"><span class="win-label">HTML</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body"><p>会一点：能写 h1、p、a 这种基础标签，再复杂的就交给 Vibe Coding 了。</p></div>
-          </div>
-          <div class="win">
-            <div class="win-title"><span class="win-label">Python 3</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body"><p>会一点：写写小脚本，本站后端 API 就是 Python（FastAPI）跑的。</p></div>
-          </div>
-          <div class="win">
-            <div class="win-title"><span class="win-label">Python 2</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body"><p>只会 print，懂的都懂。</p></div>
-          </div>
-          <div class="win">
-            <div class="win-title"><span class="win-label">CSS / JS</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body"><p>不会，全靠 AI 帮我写——本站就是 Vibe Coding 的产物。</p></div>
-          </div>
-          <div class="win">
-            <div class="win-title"><span class="win-label">折腾 & 整活</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body"><p>不会的就折腾着学，能跑起来就算成功。</p></div>
-          </div>
-        </div>
+        <div class="grid" id="site-skills-list"></div>
       </fieldset>
     </section>
 
@@ -108,36 +85,7 @@
       <fieldset>
         <legend>项目</legend>
         <p class="sec-intro">正在鼓捣的东西，更多在路上。</p>
-        <div class="grid" id="site-projects-list">
-          <div class="win">
-            <div class="win-title"><span class="win-label">PyClaw</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body">
-              <p>私人 AI 助手框架：桌面 / Web / CLI 全平台，也能当 Agent 跑；Windows 桌面打包版（PyClaw for Win）零配置、U 盘便携、低占用，下载即用。</p>
-              <p class="mt8"><a class="btn" href="https://github.com/LK-BLOG/PyClaw" target="_blank" rel="noopener noreferrer">去 GitHub ↗</a></p>
-            </div>
-          </div>
-          <div class="win">
-            <div class="win-title"><span class="win-label">PyClaw-Lite</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body">
-              <p>PyClaw 轻量版：一把 exec 走天下，没有花哨工具链，只有能自己动手的 AI 大脑。</p>
-              <p class="mt8"><a class="btn" href="https://github.com/LK-BLOG/pyclaw-lite" target="_blank" rel="noopener noreferrer">去 GitHub ↗</a></p>
-            </div>
-          </div>
-          <div class="win">
-            <div class="win-title"><span class="win-label">MollyPaw</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body">
-              <p>一只小泰迪开发的跨平台 AI Agent 桌面客户端（Python + PyWebView），对接任意 LLM API。</p>
-              <p class="mt8"><a class="btn" href="https://github.com/LK-BLOG/MollyPaw" target="_blank" rel="noopener noreferrer">去 GitHub ↗</a></p>
-            </div>
-          </div>
-          <div class="win">
-            <div class="win-title"><span class="win-label">本博客</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body">
-              <p>Win98 复古风个人主页：GitHub 存代码，Cloudflare Pages + Python Worker + D1 驱动。</p>
-              <p class="mt8"><a class="btn" href="https://github.com/LK-BLOG/BLOG" target="_blank" rel="noopener noreferrer">去 GitHub ↗</a></p>
-            </div>
-          </div>
-        </div>
+        <div class="grid" id="site-projects-list"></div>
       </fieldset>
     </section>
 
@@ -146,30 +94,7 @@
       <fieldset>
         <legend>社交账号</legend>
         <p class="sec-intro">来这些地方找我玩。</p>
-        <div class="grid" id="site-projects-list">
-          <div class="win">
-            <div class="win-title"><span class="win-label">哔哩哔哩</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body center">
-              <p><strong>玩Flip的刀盾</strong></p>
-              <p class="muted mb8">UID：129131127</p>
-              <a class="btn primary" href="https://space.bilibili.com/129131127" target="_blank" rel="noopener noreferrer">去关注 ↗</a>
-            </div>
-          </div>
-          <div class="win">
-            <div class="win-title"><span class="win-label">GitHub</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body center">
-              <p><strong>骆戡Campus</strong></p>
-              <p class="muted mb8">github.com/LK-BLOG</p>
-              <a class="btn primary" href="https://github.com/LK-BLOG" target="_blank" rel="noopener noreferrer">去看看 ↗</a>
-            </div>
-          </div>
-          <div class="win">
-            <div class="win-title"><span class="win-label">更多平台</span><span class="win-dots"><span class="dot"></span></span></div>
-            <div class="win-body center">
-              <p class="muted">后续再补（抖音 / 小红书 / 邮箱…）</p>
-            </div>
-          </div>
-        </div>
+        <div class="grid" id="site-social-list"></div>
       </fieldset>
     </section>
   </main>

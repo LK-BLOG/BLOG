@@ -113,10 +113,15 @@
 
         <div id="tab-site" class="tab-pane hidden">
           <div class="win"><div class="win-title"><span class="win-label">🧩 站点内容管理</span></div><div class="win-body">
-            <p class="muted mb8">不用写 JSON，填表就行。每项一行，空行不会保存。</p>
+            <p class="muted mb8">不用写 JSON，填表就行。技能、社交、项目、友链每项一行，空行不会保存。</p>
             <div id="site-alert"></div>
             <form id="site-form">
               <div class="form-row"><label for="site-bio">个人简介</label><textarea class="field" id="site-bio" rows="4" maxlength="5000"></textarea></div>
+
+              <div class="site-block">
+                <div class="site-block-head"><strong>技能</strong><button type="button" class="btn btn-sm" data-add-site="skills">＋ 添加</button></div>
+                <div id="site-skills-rows" class="site-rows"></div>
+              </div>
 
               <div class="site-block">
                 <div class="site-block-head"><strong>社交平台</strong><button type="button" class="btn btn-sm" data-add-site="social">＋ 添加</button></div>

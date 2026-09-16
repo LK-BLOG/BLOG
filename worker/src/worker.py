@@ -1956,7 +1956,7 @@ async def put_announcement(body: AnnouncementIn, request: Request):
 
 
 # ---------- 可编辑站点内容 ----------
-SITE_CONTENT_DEFAULT = {"bio": "", "social": [], "projects": [], "friends": []}
+SITE_CONTENT_DEFAULT = {"bio": "", "skills": [], "social": [], "projects": [], "friends": []}
 
 @app.get("/api/site-content")
 async def get_site_content(request: Request):
@@ -1974,7 +1974,7 @@ async def put_site_content(body: SiteContentIn, request: Request):
     _check_admin(request)
     data = dict(SITE_CONTENT_DEFAULT); data.update(body.content or {})
     if not isinstance(data["bio"], str): data["bio"] = str(data["bio"])
-    for key in ("social", "projects", "friends"):
+    for key in ("skills", "social", "projects", "friends"):
         if not isinstance(data[key], list): raise HTTPException(status_code=400, detail=f"{key} 必须是数组")
     db = _db(request)
     await db.prepare("INSERT INTO settings (key, value) VALUES ('site_content', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(json.dumps(data, ensure_ascii=False)).run()

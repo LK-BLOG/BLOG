@@ -575,7 +575,7 @@
   }
 
   /* ---------- 页面内容 ---------- */
-  var SITE_KINDS = ["social", "projects", "friends"];
+  var SITE_KINDS = ["skills", "social", "projects", "friends"];
 
   function addSiteRow(kind, item) {
     item = item || {};
@@ -585,6 +585,7 @@
     row.className = "site-row";
 
     var placeholders = {
+      skills: ["技能名", "链接（可空）", "说明"],
       social: ["名称", "链接", "说明"],
       projects: ["项目名", "项目链接", "项目介绍"],
       friends: ["站点名", "网站链接", "一句话介绍"]

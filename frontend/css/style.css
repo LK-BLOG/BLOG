@@ -394,6 +394,7 @@ th { background: var(--face); }
 .hidden { display: none !important; }
 .nowrap { white-space: nowrap; }
 .px12 { padding-left: 12px; padding-right: 12px; }
+.bio-text { white-space: pre-line; }
 
 /* ===== 响应式：导航汉堡 ===== */
 @media (max-width: 768px) {
