@@ -635,7 +635,7 @@ th { background: var(--face); }
   line-height: 1.1;
   margin-bottom: 4px;
 }
-.os-windows { position: absolute; inset: 0; }
+.os-windows { position: absolute; inset: 0; pointer-events: none; }
 .os-window {
   position: absolute;
   width: 720px;
@@ -653,6 +653,7 @@ th { background: var(--face); }
   box-shadow: 3px 3px 0 rgba(0, 0, 0, .45);
   overflow: hidden;
   resize: both;
+  pointer-events: auto;
 }
 .os-window.active { box-shadow: 4px 4px 0 rgba(0, 0, 0, .55); }
 .os-window.maximized {
