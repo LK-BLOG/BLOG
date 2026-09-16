@@ -529,3 +529,30 @@ th { background: var(--face); }
   width: 420px;
   max-width: 100%;
 }
+
+/* 页面内容管理：一行一个条目 */
+.site-block {
+  border: 2px inset;
+  border-color: var(--shadow) var(--hl) var(--hl) var(--shadow);
+  background: var(--face);
+  padding: 8px;
+  margin-bottom: 12px;
+}
+.site-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.site-rows { display: flex; flex-direction: column; gap: 6px; }
+.site-row {
+  display: grid;
+  grid-template-columns: 140px minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+.site-row .field { background: #fff; }
+@media (max-width: 768px) {
+  .site-row { grid-template-columns: 1fr; }
+}

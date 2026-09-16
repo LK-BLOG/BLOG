@@ -575,20 +575,79 @@
   }
 
   /* ---------- 页面内容 ---------- */
+  var SITE_KINDS = ["social", "projects", "friends"];
+
+  function addSiteRow(kind, item) {
+    item = item || {};
+    var box = $("site-" + kind + "-rows");
+    if (!box) return;
+    var row = document.createElement("div");
+    row.className = "site-row";
+
+    var placeholders = {
+      social: ["名称", "链接", "说明"],
+      projects: ["项目名", "项目链接", "项目介绍"],
+      friends: ["站点名", "网站链接", "一句话介绍"]
+    };
+    var p = placeholders[kind] || ["名称", "链接", "说明"];
+
+    function makeInput(cls, placeholder, maxLength, value) {
+      var input = document.createElement("input");
+      input.type = "text";
+      input.className = "field " + cls;
+      input.placeholder = placeholder;
+      input.maxLength = maxLength;
+      input.value = value || "";
+      return input;
+    }
+
+    var remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "btn btn-sm danger site-remove";
+    remove.textContent = "删";
+    remove.addEventListener("click", function () { row.remove(); });
+
+    row.appendChild(makeInput("site-name", p[0], 80, item.name));
+    row.appendChild(makeInput("site-url", p[1], 500, item.url));
+    row.appendChild(makeInput("site-desc", p[2], 300, item.desc));
+    row.appendChild(remove);
+    box.appendChild(row);
+  }
+
+  function collectSiteRows(kind) {
+    var out = [];
+    document.querySelectorAll("#site-" + kind + "-rows .site-row").forEach(function (row) {
+      var item = {
+        name: row.querySelector(".site-name").value.trim(),
+        url: row.querySelector(".site-url").value.trim(),
+        desc: row.querySelector(".site-desc").value.trim()
+      };
+      if (item.name || item.url || item.desc) out.push(item);
+    });
+    return out;
+  }
+
   function loadSiteContent() {
     Blog.api("/api/site-content").then(function (d) {
       $("site-bio").value = d.bio || "";
-      $("site-social").value = JSON.stringify(d.social || [], null, 2);
-      $("site-projects").value = JSON.stringify(d.projects || [], null, 2);
-      $("site-friends").value = JSON.stringify(d.friends || [], null, 2);
+      SITE_KINDS.forEach(function (kind) {
+        var box = $("site-" + kind + "-rows");
+        if (!box) return;
+        box.innerHTML = "";
+        (d[kind] || []).forEach(function (item) { addSiteRow(kind, item); });
+      });
     }).catch(function (e) { $("site-alert").innerHTML = '<div class="alert error">加载失败：' + Blog.escapeHtml(e.message) + '</div>'; });
   }
+
   function bindSiteForm() {
     var form = $("site-form"); if (!form) return;
+    form.querySelectorAll("[data-add-site]").forEach(function (btn) {
+      btn.addEventListener("click", function () { addSiteRow(btn.dataset.addSite, {}); });
+    });
     form.addEventListener("submit", function (e) {
-      e.preventDefault(); var content = { bio: $("site-bio").value.trim() };
-      try { content.social = JSON.parse($("site-social").value || "[]"); content.projects = JSON.parse($("site-projects").value || "[]"); content.friends = JSON.parse($("site-friends").value || "[]"); }
-      catch (err) { $("site-alert").innerHTML = '<div class="alert error">JSON 格式错了：' + Blog.escapeHtml(err.message) + '</div>'; return; }
+      e.preventDefault();
+      var content = { bio: $("site-bio").value.trim() };
+      SITE_KINDS.forEach(function (kind) { content[kind] = collectSiteRows(kind); });
       Blog.api("/api/site-content", { method: "PUT", body: { content: content } }).then(function () { $("site-alert").innerHTML = '<div class="alert ok">保存成功</div>'; }).catch(function (err) { $("site-alert").innerHTML = '<div class="alert error">保存失败：' + Blog.escapeHtml(err.message) + '</div>'; });
     });
   }
