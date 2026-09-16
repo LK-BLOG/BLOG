@@ -5,6 +5,51 @@
   "use strict";
 
   var API = (window.API_BASE || "").replace(/\/+$/, "");
+  var EMBEDDED = window.self !== window.top || new URLSearchParams(location.search).get("embed") === "1";
+  window.__XIAOKAN_EMBEDDED__ = EMBEDDED;
+
+  try {
+    var forcedTheme = new URLSearchParams(location.search).get("theme");
+    document.documentElement.setAttribute(
+      "data-theme",
+      forcedTheme === "os" || forcedTheme === "normal" ? forcedTheme : (localStorage.getItem("xiaokan_theme") || "normal")
+    );
+  } catch (e) {
+    document.documentElement.setAttribute("data-theme", "normal");
+  }
+
+  function applyTheme(theme) {
+    theme = theme === "os" ? "os" : "normal";
+    document.documentElement.setAttribute("data-theme", theme);
+    if (!EMBEDDED) document.body.classList.toggle("os-mode", theme === "os");
+    try { localStorage.setItem("xiaokan_theme", theme); } catch (e) {}
+    document.querySelectorAll("[data-theme-select]").forEach(function (sel) { sel.value = theme; });
+    if (window.XiaokanOS && window.XiaokanOS.setTheme) window.XiaokanOS.setTheme(theme);
+  }
+
+  function initTheme() {
+    if (EMBEDDED) {
+      document.documentElement.setAttribute("data-theme", "normal");
+      document.body.classList.add("embedded");
+      return;
+    }
+    var theme = "normal";
+    try { theme = localStorage.getItem("xiaokan_theme") || "normal"; } catch (e) {}
+    var forcedTheme = new URLSearchParams(location.search).get("theme");
+    if (forcedTheme === "os" || forcedTheme === "normal") theme = forcedTheme;
+    applyTheme(theme);
+    var nav = document.querySelector(".nav");
+    if (nav && !nav.querySelector(".theme-picker")) {
+      var picker = document.createElement("label");
+      picker.className = "theme-picker";
+      picker.innerHTML = '<span>主题</span><select class="field" data-theme-select>' +
+        '<option value="normal">Normal</option><option value="os">OS</option></select>';
+      nav.appendChild(picker);
+    }
+    document.addEventListener("change", function (e) {
+      if (e.target && e.target.matches && e.target.matches("[data-theme-select]")) applyTheme(e.target.value);
+    });
+  }
 
   function api(path, options) {
     options = options || {};
@@ -156,8 +201,9 @@
   }
 
   function initCommon() {
+    initTheme();
     loadSiteContent();
-    promptEmailBinding();
+    if (!EMBEDDED) promptEmailBinding();
   }
 
   window.Blog = {
@@ -172,7 +218,8 @@
     setUser: setUser,
     logout: logout,
     escapeHtml: escapeHtml,
-    fmtDate: fmtDate
+    fmtDate: fmtDate,
+    applyTheme: applyTheme
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initCommon); else initCommon();
