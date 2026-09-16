@@ -217,7 +217,7 @@
     bindBotForm();
     bindOverview();
     var isMod = Blog.getRole() === "moderator";
-    ["tab-articles", "tab-users", "tab-bot", "tab-editor", "new-article-btn"].forEach(function (id) {
+    ["tab-articles", "tab-users", "tab-bot", "tab-site", "tab-editor", "new-article-btn"].forEach(function (id) {
       var el = $(id);
       if (el) el.style.display = isMod ? "none" : "";
     });
@@ -257,7 +257,7 @@
     document.querySelectorAll("[data-tab]").forEach(function (b) {
       b.classList.toggle("primary", b.dataset.tab === tab);
     });
-    ["overview", "articles", "messages", "comments", "users", "reports", "audit", "bot", "editor"].forEach(function (t) {
+    ["overview", "articles", "messages", "comments", "users", "reports", "audit", "bot", "site", "editor"].forEach(function (t) {
       $("tab-" + t).classList.toggle("hidden", t !== tab);
     });
     if (tab === "overview") loadOverview();
