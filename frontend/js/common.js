@@ -77,8 +77,18 @@
     if (!document.getElementById("site-friends-list") && !document.getElementById("site-projects-list") && !document.getElementById("site-social-list") && !document.getElementById("site-bio")) return;
     api("/api/site-content").then(function (d) {
       var bio = document.getElementById("site-bio"); if (bio && d.bio) bio.textContent = d.bio;
-      function render(id, items, empty) { var box = document.getElementById(id); if (!box || !Array.isArray(items) || !items.length) return; box.innerHTML = items.map(function (x) { return '<div class="win"><div class="win-title"><span class="win-label">' + escapeHtml(x.name || "未命名") + '</span></div><div class="win-body"><p>' + escapeHtml(x.desc || "") + '</p>' + (x.url ? '<p class="mt8"><a class="btn" href="' + escapeHtml(x.url) + '" target="_blank" rel="noopener">打开 ↗</a></p>' : '') + '</div></div>'; }).join(""); }
-      render("site-friends-list", d.friends); render("site-projects-list", d.projects); render("site-social-list", d.social);
+      function render(id, items, emptyText) {
+        var box = document.getElementById(id);
+        if (!box) return;
+        if (!Array.isArray(items) || !items.length) {
+          if (emptyText) box.innerHTML = '<div class="win"><div class="win-body"><p class="muted">' + escapeHtml(emptyText) + '</p></div></div>';
+          return;
+        }
+        box.innerHTML = items.map(function (x) { return '<div class="win"><div class="win-title"><span class="win-label">' + escapeHtml(x.name || "未命名") + '</span></div><div class="win-body"><p>' + escapeHtml(x.desc || "") + '</p>' + (x.url ? '<p class="mt8"><a class="btn" href="' + escapeHtml(x.url) + '" target="_blank" rel="noopener">打开 ↗</a></p>' : '') + '</div></div>'; }).join("");
+      }
+      render("site-friends-list", d.friends, "还没有友链。想交换友链？留言板吱一声。");
+      render("site-projects-list", d.projects);
+      render("site-social-list", d.social);
     }).catch(function () {});
   }
 
