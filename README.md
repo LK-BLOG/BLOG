@@ -44,6 +44,14 @@ blog/
 | GET | /api/messages | 留言列表 | - |
 | POST | /api/messages | 发留言（60s/IP 限频） | - |
 | DELETE | /api/messages/{id} | 删除留言 | admin |
+| GET | /api/me | 当前账号信息（含邮箱绑定状态） | 登录 |
+| POST | /api/me/email/code | 给当前账号发送绑定邮箱验证码 | 登录 |
+| POST | /api/me/email/verify | 验证并绑定邮箱 | 登录 |
+| POST | /api/auth/password-reset/code | 发送重置密码验证码 | - |
+| POST | /api/auth/password-reset/confirm | 用验证码重置密码 | - |
+| GET | /api/mail/outbox | 查看本地邮件桥待发邮件 | admin |
+| POST | /api/mail/outbox/{id}/sent | 标记邮件已发送 | admin |
+| POST | /api/mail/outbox/{id}/failed | 标记邮件发送失败 | admin |
 
 ## 本地调试
 
@@ -96,13 +104,48 @@ npx wrangler deploy
 把 `frontend/js/config.js` 里的 `window.API_BASE` 改成 Worker 地址，推送到 GitHub，Pages 自动更新。
 
 ### 6. 配置 admin 密码（重要）
-密码不写进仓库：本地用 worker/.dev.vars，线上执行 
-px wrangler secret put ADMIN_PASSWORD。
+密码不写进仓库：本地用 worker/.dev.vars，线上执行：
+
+```powershell
+npx wrangler secret put ADMIN_PASSWORD
+npx wrangler secret put EMAIL_CODE_SECRET
+```
 
 ### 7. 验收
 - 首页能显示最新文章；文章列表/详情正常。
 - 留言板能发留言，1 分钟内重复发会被限频。
 - 页脚「管理入口」用你配置的 `ADMIN_PASSWORD` 登录，能写文章、删留言。
+- 未绑定邮箱的普通账号进首页会弹绑定提示。
+- 忘记密码页可以发验证码，验证码由本地邮件桥用 `pyclaw@agent.qq.com` 发出。
+
+## 邮箱验证码 / 本地邮件桥
+
+Cloudflare Worker 不能执行本机的 `agently-cli`，所以发信拆成两段：
+
+1. Worker 把验证码邮件写进 D1 的 `email_outbox`。
+2. 本机运行邮件桥，轮询队列并调用已授权的 `agently-cli` 发送。
+
+先确认 CLI 已授权：
+
+```powershell
+agently-cli auth status
+agently-cli +me
+```
+
+跑一次邮件桥（先只看队列，不发）：
+
+```powershell
+$env:ADMIN_PASSWORD="线上 admin 密码"
+python tools/email_bridge.py
+```
+
+确认后真正发送：
+
+```powershell
+python tools/email_bridge.py --yes
+```
+
+`--yes` 就是你对本次发信的明确确认。没加时脚本只列队列，不发送。
 
 ## 安全提示（上线前建议）
 
@@ -110,7 +153,9 @@ px wrangler secret put ADMIN_PASSWORD。
   ```powershell
   npx wrangler secret put ADMIN_PASSWORD
   ```
-- 本地测试数据和生产数据是分开的（`--local` 用本地 SQLite，`--remote` 用线上 D1）。`n- 忘了密码？直接改 `.dev.vars` / 重新 `wrangler secret put ADMIN_PASSWORD` 即可，前端无需改动。
+- 本地测试数据和生产数据是分开的（`--local` 用本地 SQLite，`--remote` 用线上 D1）。
+- 管理员密码忘了？直接重新 `wrangler secret put ADMIN_PASSWORD`，前端无需改动。
+- 邮箱验证码只走 `email_outbox`，邮件桥没跑时用户会一直收不到信；这是 Cloudflare Worker + 本机 CLI 的硬限制。
 
 ## 如果 Python Worker beta 出问题
 

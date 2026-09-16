@@ -268,6 +268,7 @@
     if (tab === "reports") loadReports();
     if (tab === "audit") loadAudit();
     if (tab === "bot") loadBotSettings();
+    if (tab === "site") loadSiteContent();
   }
 
   /* ---------- 文章管理 ---------- */
@@ -482,9 +483,12 @@
         } else {
           ops = '<span class="muted px12">不可操作</span>';
         }
+        var emailText = u.email_verified && u.email
+          ? "邮箱：" + Blog.escapeHtml(u.email)
+          : "<span class=\"tag tag-danger\">未绑定邮箱</span>";
         html += '<div class="user-card">' +
           '<div class="user-card-head">' + Blog.escapeHtml(u.username) + ' <span class="tag">' + roleTxt + '</span> <span class="tag ' + (u.banned ? "tag-danger" : "") + '">' + status + '</span></div>' +
-          '<div class="user-card-meta">名称：' + Blog.escapeHtml(u.display_name || "-") + " · ID " + u.id + "<br>" + Blog.escapeHtml(Blog.fmtDate(u.created_at)) + "</div>" +
+          '<div class="user-card-meta">名称：' + Blog.escapeHtml(u.display_name || "-") + " · ID " + u.id + "<br>" + emailText + "<br>" + Blog.escapeHtml(Blog.fmtDate(u.created_at)) + "</div>" +
           '<div class="user-card-ops">' + ops + "</div>" +
           "</div>";
       });
@@ -570,6 +574,24 @@
     });
   }
 
+  /* ---------- 页面内容 ---------- */
+  function loadSiteContent() {
+    Blog.api("/api/site-content").then(function (d) {
+      $("site-bio").value = d.bio || "";
+      $("site-social").value = JSON.stringify(d.social || [], null, 2);
+      $("site-projects").value = JSON.stringify(d.projects || [], null, 2);
+      $("site-friends").value = JSON.stringify(d.friends || [], null, 2);
+    }).catch(function (e) { $("site-alert").innerHTML = '<div class="alert error">加载失败：' + Blog.escapeHtml(e.message) + '</div>'; });
+  }
+  function bindSiteForm() {
+    var form = $("site-form"); if (!form) return;
+    form.addEventListener("submit", function (e) {
+      e.preventDefault(); var content = { bio: $("site-bio").value.trim() };
+      try { content.social = JSON.parse($("site-social").value || "[]"); content.projects = JSON.parse($("site-projects").value || "[]"); content.friends = JSON.parse($("site-friends").value || "[]"); }
+      catch (err) { $("site-alert").innerHTML = '<div class="alert error">JSON 格式错了：' + Blog.escapeHtml(err.message) + '</div>'; return; }
+      Blog.api("/api/site-content", { method: "PUT", body: { content: content } }).then(function () { $("site-alert").innerHTML = '<div class="alert ok">保存成功</div>'; }).catch(function (err) { $("site-alert").innerHTML = '<div class="alert error">保存失败：' + Blog.escapeHtml(err.message) + '</div>'; });
+    });
+  }
   /* ---------- 机器人设置 ---------- */
   function loadBotSettings() {
     var box = $("bot-limit"), reg = $("reg-limit");
@@ -648,4 +670,5 @@
 
   init();
   initEditor();
+  bindSiteForm();
 })();
