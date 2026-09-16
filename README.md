@@ -147,6 +147,20 @@ python tools/email_bridge.py --yes
 
 `--yes` 就是你对本次发信的明确确认。没加时脚本只列队列，不发送。
 
+### Windows 后台自动发信（推荐）
+
+只配一次，之后每分钟自动查队列，不用手动跑：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\setup_email_bridge.ps1
+```
+
+它会问一次线上 admin 密码，用 Windows 当前用户 DPAPI 加密存本机。卸载：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\setup_email_bridge.ps1 -Uninstall
+```
+
 ## 安全提示（上线前建议）
 
 - admin 密码不写在仓库里（`wrangler.toml` 无明文）。本地用 `.dev.vars`，线上用：
