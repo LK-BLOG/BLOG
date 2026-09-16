@@ -14,6 +14,8 @@ pyclaw@agent.qq.com 发出去。
 import argparse
 import json
 import os
+import pathlib
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -54,9 +56,21 @@ def api_request(base, path, method="GET", payload=None, token=""):
         raise RuntimeError("HTTP %s: %s" % (exc.code, detail)) from exc
 
 
+def cli_command():
+    exe = shutil.which("agently-cli")
+    if not exe:
+        raise RuntimeError("找不到 agently-cli，先 npm install -g @tencent-qqmail/agently-cli")
+    if os.name == "nt" and exe.lower().endswith((".cmd", ".bat")):
+        run_js = pathlib.Path(exe).resolve().parent / "node_modules" / "@tencent-qqmail" / "agently-cli" / "scripts" / "run.js"
+        node = shutil.which("node")
+        if node and run_js.exists():
+            return [node, str(run_js)]
+    return [exe]
+
+
 def run_cli(args):
     proc = subprocess.run(
-        ["agently-cli"] + args,
+        cli_command() + args,
         capture_output=True,
         text=True,
         encoding="utf-8",
