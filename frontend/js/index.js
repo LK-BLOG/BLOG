@@ -5,7 +5,7 @@
   Blog.api("/api/announcement").then(function (d) {
     var el = document.getElementById("announcement");
     if (el && d && d.text) {
-      el.textContent = "📢 " + d.text;
+      el.innerHTML = Blog.icon("book") + " " + Blog.escapeHtml(d.text);
       el.classList.remove("hidden");
     }
   }).catch(function () {});

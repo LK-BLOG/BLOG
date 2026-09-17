@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Python syntax
+        run: python -m py_compile worker/src/worker.py
+      - name: JavaScript syntax
+        run: |
+          node --check frontend/js/common.js
+          node --check frontend/js/os.js
+          node --check frontend/js/index.js
+          node --check frontend/js/articles.js
+          node --check frontend/js/article.js
+          node --check frontend/js/guestbook.js
+          node --check frontend/js/chat.js
+          node --check frontend/js/admin.js
+      - name: Check for broken local icon references
+        run: |
+          ! grep -R "win98-icons.svg#" frontend --include='*.html' --include='*.js'
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          missing = []
+          for path in Path("frontend").rglob("*"):
+              if path.suffix not in {".html", ".js"}:
+                  continue
+              text = path.read_text(encoding="utf-8")
+              for name in re.findall(r"assets/win98-icons/([A-Za-z0-9_-]+)\.png", text):
+                  if not Path("frontend/assets/win98-icons", name + ".png").exists():
+                      missing.append(f"{path}: {name}")
+          if missing:
+              raise SystemExit("\n".join(missing))
+          PY

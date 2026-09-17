@@ -12,7 +12,7 @@
     d.className = "chat-msg " + (role === "user" ? "me" : "bot");
     var nick = document.createElement("div");
     nick.className = "chat-nick";
-    nick.textContent = role === "user" ? "我" : "🤖 机器人";
+    nick.innerHTML = role === "user" ? "我" : Blog.icon("robot") + " 机器人";
     var body = document.createElement("div");
     body.className = "chat-text";
     body.textContent = text;
@@ -27,7 +27,7 @@
   }
 
   function loginUrl() {
-    return "login.html?next=" + encodeURIComponent(location.pathname);
+    return "login.html?next=" + encodeURIComponent(location.pathname + location.search);
   }
 
   function renderAuth() {
@@ -46,7 +46,7 @@
     if (userSpan) {
       if (authed) {
         var u = Blog.getUsername() || "？";
-        var role = Blog.getRole() === "admin" ? " · 管理员" : "";
+        var role = Blog.getRole() === "admin" ? " | 管理员" : "";
         userSpan.textContent = "[" + u + role + "]";
       } else {
         userSpan.textContent = "";
@@ -83,7 +83,7 @@
     }
     if (logoutBtn) logoutBtn.style.display = authed ? "" : "none";
 
-    var inputRow = $("chat-input-row");
+    var inputRow = $("chat-input-row") || (win ? win.querySelector(".chat-input-row") : null);
     if (inputRow) inputRow.style.display = authed ? "" : "none";
 
     var hint = $("chat-login-hint");

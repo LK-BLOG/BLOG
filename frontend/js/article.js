@@ -37,6 +37,13 @@
 
   function esc(s) { return Blog.escapeHtml(s); }
 
+  function renderMarkdown(md) {
+    if (!window.marked) return "<p>" + esc(md || "") + "</p>";
+    var html = marked.parse(md || "");
+    if (window.DOMPurify) return DOMPurify.sanitize(html);
+    return "<p>" + esc(md || "") + "</p>";
+  }
+
   var collapsed = {};
 
   function renderComments(list) {
@@ -76,7 +83,7 @@
       if (kids) {
         ops += "<button class='btn' data-toggle='" + m.id + "'>" + (collapsed[m.id] ? "▸ 展开" : "▾ 折叠") + " (" + kids + ")</button> ";
       }
-      ops += "<button class='btn " + (m.liked ? "primary" : "") + "' data-like='" + m.id + "'>⭐ " + (m.likes || 0) + "</button> ";
+        ops += "<button class='btn " + (m.liked ? "primary" : "") + "' data-like='" + m.id + "'>" + Blog.icon("like") + " " + (m.likes || 0) + "</button> ";
       ops += "<button class='btn' data-reply='" + m.id + "' data-nick='" + esc(m.nickname) + "'>回复</button> ";
       if (m.is_mine) {
         ops += "<button class='btn danger' data-del='" + m.id + "'>删除</button>";
@@ -124,7 +131,7 @@
           .then(function (d) {
             if (d && typeof d.liked === "boolean") {
               b.classList.toggle("primary", d.liked);
-              b.textContent = "⭐ " + (d.likes || 0);
+              b.innerHTML = Blog.icon("like") + " " + (d.likes || 0);
             }
           })
           .catch(function (err) {
@@ -169,7 +176,12 @@
       btn.dataset.bound = "1";
       btn.addEventListener("click", function () {
         var url = btn.getAttribute("data-url");
-        if (url) { window.open(url, "_blank", "noopener"); return; }
+        if (url) {
+          var safe = Blog.safeUrl(url);
+          if (safe) window.open(safe, "_blank", "noopener");
+          else showWin98Popup("这个链接不安全，已拦截。");
+          return;
+        }
         showWin98Popup(btn.getAttribute("data-msg") || "");
       });
     });
@@ -248,7 +260,7 @@
     }
     var h = "";
     if (cmtPage > 1) h += "<button class='btn btn-sm' data-pg='" + (cmtPage - 1) + "'>上一页</button> ";
-    h += '<span class="muted px12">第 ' + cmtPage + " / " + totalPages + " 页 · 共 " + total + " 条评论</span> ";
+    h += '<span class="muted px12">第 ' + cmtPage + " / " + totalPages + " 页 | 共 " + total + " 条评论</span> ";
     if (cmtPage < totalPages) h += "<button class='btn btn-sm' data-pg='" + (cmtPage + 1) + "'>下一页</button>";
     pager.innerHTML = h;
     pager.querySelectorAll("[data-pg]").forEach(function (b) {
@@ -278,13 +290,13 @@
     Blog.api("/api/articles/" + encodeURIComponent(slug)).then(function (a) {
       document.title = a.title + " - 小戡的博客";
       box.innerHTML =
-        '<div class="win-title"><span class="win-label">📖 ' + esc(a.title) + '</span><span class="win-dots"><span class="dot"></span></span></div>' +
+        '<div class="win-title"><span class="win-label">' + Blog.icon("document") + " " + esc(a.title) + '</span><span class="win-dots"><span class="dot"></span></span></div>' +
         '<div class="win-body">' +
           '<p class="post-meta">发布 ' + esc(Blog.fmtDate(a.created_at)) +
-          (a.updated_at && a.updated_at !== a.created_at ? " · 更新 " + esc(Blog.fmtDate(a.updated_at)) : "") +
-          " · " + (a.views || 0) + " 次浏览" +
-          (a.tags ? " · " + esc(a.tags).split(",").map(function (t) { return "#" + t.trim(); }).filter(Boolean).join(" ") : "") + "</p>" +
-          '<div class="markdown-body">' + (window.DOMPurify ? DOMPurify.sanitize(marked.parse(a.content_md)) : marked.parse(a.content_md)) + "</div>" +
+          (a.updated_at && a.updated_at !== a.created_at ? " | 更新 " + esc(Blog.fmtDate(a.updated_at)) : "") +
+          " | " + (a.views || 0) + " 次浏览" +
+          (a.tags ? " | " + esc(a.tags).split(",").map(function (t) { return "#" + t.trim(); }).filter(Boolean).join(" ") : "") + "</p>" +
+          '<div class="markdown-body">' + renderMarkdown(a.content_md) + "</div>" +
         "</div>";
       commentsBox.classList.remove("hidden");
       renderAuth();

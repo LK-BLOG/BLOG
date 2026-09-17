@@ -2,8 +2,7 @@
 // API 地址配置
 // ------------------------------------------------------------
 // 本地调试：   改成 "http://127.0.0.1:8787"
-// 上线部署：   改成你的 Python Worker 地址，例如
-//              "https://xiaokan-api.你的账号子域.workers.dev"
-// 留空 ""：    表示走同源 /api/*（需要把 Worker 挂到同域名路由）
+// 线上部署：   保持空字符串，走同源 /api/*
+// Pages Functions 会代理到 Python Worker，不直接暴露 workers.dev
 // ============================================================
 window.API_BASE = ""; // 同源 /api/*（Pages Functions 代理到 Worker）

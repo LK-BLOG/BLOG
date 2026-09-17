@@ -8,6 +8,7 @@
   var nickInput = document.getElementById("nickname");
   var contentInput = document.getElementById("content");
   var authHint = document.getElementById("msg-auth");
+  var msgPage = 1;
 
   function showAlert(msg, type) {
     alertBox.innerHTML = '<div class="alert ' + (type || "error") + '">' + Blog.escapeHtml(msg) + "</div>";
@@ -28,15 +29,16 @@
     }
   }
 
-  function loadMessages() {
+  function loadMessages(page) {
+    if (page) msgPage = page;
     listBox.innerHTML = '<p class="muted px12">加载中…</p>';
-    Blog.api("/api/messages").then(function (data) {
+    Blog.api("/api/messages?page=" + msgPage).then(function (data) {
       var list = (data && data.messages) || [];
       if (!list.length) {
         listBox.innerHTML = '<p class="muted px12">还没有留言，来说两句？</p>';
         return;
       }
-      var html = '<div class="win-title"><span class="win-label">💬 留言条 ' + list.length + ' 条</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div><div class="win-body">';
+      var html = '<div class="win-title"><span class="win-label">' + Blog.icon("comment") + ' 留言条 ' + list.length + ' 条</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div><div class="win-body">';
       list.forEach(function (m) {
         var ops = "";
         if (m.is_mine) {
@@ -49,6 +51,13 @@
           '<div class="msg-content">' + esc(m.content) + "</div>" + ops +
           "</div>";
       });
+      if ((data.total_pages || 1) > 1) {
+        html += '<div class="mb8" style="display:flex;gap:6px;align-items:center">';
+        if (msgPage > 1) html += '<button class="btn btn-sm" data-msg-page="' + (msgPage - 1) + '">上一页</button>';
+        html += '<span class="muted px12">第 ' + msgPage + " / " + data.total_pages + " 页 | 共 " + data.total + " 条</span>";
+        if (msgPage < data.total_pages) html += '<button class="btn btn-sm" data-msg-page="' + (msgPage + 1) + '">下一页</button>';
+        html += "</div>";
+      }
       html += "</div>";
       listBox.innerHTML = html;
       listBox.querySelectorAll("[data-del]").forEach(function (b) {
@@ -78,6 +87,9 @@
             })
             .finally(function () { btn.disabled = false; });
         });
+      });
+      listBox.querySelectorAll("[data-msg-page]").forEach(function (b) {
+        b.addEventListener("click", function () { loadMessages(parseInt(b.dataset.msgPage, 10)); });
       });
     }).catch(function (err) {
       listBox.innerHTML = '<div class="alert error">加载失败：' + esc(err.message) + "（检查 config.js 里的 API 地址）</div>";

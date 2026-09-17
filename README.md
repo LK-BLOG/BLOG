@@ -4,7 +4,7 @@
 
 - 首页：个人简介 / 技能 / 项目 / 社交账号 / 最新文章
 - 文章：admin 面板写 Markdown 发布（密码走环境变量，不写进仓库）
-- 留言板：免登录留言，60 秒/IP 限频，admin 可删
+- 留言板：游客可留言；登录用户需先绑定并验证邮箱
 - 关于 / 友链 / 404
 
 ## 目录结构
@@ -61,7 +61,7 @@ blog/
 # 1. 装 uv（如果还没有）
 python -m pip install uv
 
-# 2. 起 Worker + 本地 D1
+# 2. 起 Worker + 本地 D1（需要能用 workerd）
 cd worker
 uv sync
 uv run pywrangler d1 migrations apply xiaokan-blog --local
@@ -72,7 +72,7 @@ cd frontend
 python -m http.server 8000
 ```
 
-本地调试时把 `frontend/js/config.js` 里的 `window.API_BASE` 改成 `"http://127.0.0.1:8787"`。
+本地调试时把 `frontend/js/config.js` 里的 `window.API_BASE` 改成 `"http://127.0.0.1:8787"`；线上保持空字符串。
 浏览器开 http://127.0.0.1:8000 ，admin 入口在页脚。
 先在 worker/.dev.vars 里配好 ADMIN_PASSWORD（复制 .dev.vars.example，密码自己定）。
 
@@ -101,13 +101,14 @@ npx wrangler deploy
 ```
 
 ### 5. 让前端连上 API
-把 `frontend/js/config.js` 里的 `window.API_BASE` 改成 Worker 地址，推送到 GitHub，Pages 自动更新。
+保持 `frontend/js/config.js` 的 `window.API_BASE = ""`。`functions/api/[[path]].ts` 会把同源 `/api/*` 转发到 Worker，推送到 GitHub 后 Pages 自动更新。
 
 ### 6. 配置 admin 密码（重要）
 密码不写进仓库：本地用 worker/.dev.vars，线上执行：
 
 ```powershell
 npx wrangler secret put ADMIN_PASSWORD
+npx wrangler secret put AUTH_SECRET
 npx wrangler secret put EMAIL_CODE_SECRET
 ```
 
@@ -120,10 +121,10 @@ npx wrangler secret put EMAIL_CODE_SECRET
 
 ## 邮箱验证码 / 本地邮件桥
 
-Cloudflare Worker 不能执行本机的 `agently-cli`，所以发信拆成两段：
+优先走 Cloudflare Worker → Gmail Apps Script 云端发信；没配置 Gmail 时，才退回本地邮件桥：
 
-1. Worker 把验证码邮件写进 D1 的 `email_outbox`。
-2. 本机运行邮件桥，轮询队列并调用已授权的 `agently-cli` 发送。
+1. 配置了 `GMAIL_SCRIPT_URL` / `GMAIL_SCRIPT_TOKEN` 时，Worker 直接发信。
+2. 没配置时，Worker 把验证码邮件写进 D1 的 `email_outbox`，本机邮件桥轮询并调用已授权的 `agently-cli`。
 
 先确认 CLI 已授权：
 
@@ -162,7 +163,7 @@ npx wrangler secret put GMAIL_SCRIPT_URL
 npx wrangler secret put GMAIL_SCRIPT_TOKEN
 ```
 
-配置后 Worker 会直接通过 Gmail 发信；没配置时才走本地 `email_outbox`。
+配置后 Worker 会直接通过 Gmail 发信，电脑不开也能收验证码；没配置时才走本地 `email_outbox`。
 
 ### Windows 后台自动发信（推荐）
 
@@ -186,7 +187,7 @@ powershell -ExecutionPolicy Bypass -File tools\setup_email_bridge.ps1 -Uninstall
   ```
 - 本地测试数据和生产数据是分开的（`--local` 用本地 SQLite，`--remote` 用线上 D1）。
 - 管理员密码忘了？直接重新 `wrangler secret put ADMIN_PASSWORD`，前端无需改动。
-- 邮箱验证码只走 `email_outbox`，邮件桥没跑时用户会一直收不到信；这是 Cloudflare Worker + 本机 CLI 的硬限制。
+- 优先配置 Gmail Apps Script，避免本地邮件桥依赖电脑常开。
 
 ## 如果 Python Worker beta 出问题
 

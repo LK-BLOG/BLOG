@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>管理后台 - 小戡的博客</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <meta name="description" content="????? - ?????">
+<meta name="description" content="小戡的博客 - 管理后台">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="lib/quill.snow.css">
   <style>
@@ -18,7 +18,7 @@
 <body>
 
   <nav class="nav">
-    <div class="nav-brand"><a href="index.html"><span class="brand-icon">戡</span>小戡的博客 · 管理后台</a></div>
+    <div class="nav-brand"><a href="index.html"><span class="brand-icon">戡</span>小戡的博客 | 管理后台</a></div>
     <div class="nav-links" id="admin-nav-extra"></div>
   </nav>
 
@@ -26,7 +26,7 @@
     <section class="section" style="max-width:860px">
       <!-- 登录窗 -->
       <div id="login-view" class="win" style="max-width:400px;margin:40px auto">
-        <div class="win-title"><span class="win-label">🔒 管理员登录</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+        <div class="win-title"><span class="win-label"><img class="win98-svg-icon" src="assets/win98-icons/lock.png" alt=""> 管理员登录</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
         <div class="win-body">
           <div id="login-alert"></div>
           <form id="login-form">
@@ -46,22 +46,22 @@
       <!-- 管理面板 -->
       <div id="panel-view" class="hidden">
         <div class="mb16" style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn primary" data-tab="overview">📊 概览</button>
+          <button class="btn primary" data-tab="overview"><img class="win98-svg-icon" src="assets/win98-icons/dashboard.png" alt="">概览</button>
           <button class="btn" data-tab="articles">文章管理</button>
           <button class="btn" data-tab="messages">留言管理</button>
           <button class="btn" data-tab="comments">评论管理</button>
-          <button class="btn" data-tab="users">👥 用户管理</button>
-          <button class="btn" data-tab="reports">🚩 举报记录</button>
-          <button class="btn" data-tab="audit">📋 操作日志</button>
-          <button class="btn" data-tab="bot">🤖 机器人设置</button>
-          <button class="btn" data-tab="site">🧩 页面内容</button>
-          <button class="btn" data-tab="editor" id="new-article-btn">＋ 写新文章</button>
+          <button class="btn" data-tab="users"><img class="win98-svg-icon" src="assets/win98-icons/friends.png" alt="">用户管理</button>
+          <button class="btn" data-tab="reports"><img class="win98-svg-icon" src="assets/win98-icons/about.png" alt="">举报记录</button>
+          <button class="btn" data-tab="audit"><img class="win98-svg-icon" src="assets/win98-icons/notepad-file.png" alt="">操作日志</button>
+          <button class="btn" data-tab="bot"><img class="win98-svg-icon" src="assets/win98-icons/robot.png" alt="">机器人设置</button>
+          <button class="btn" data-tab="site"><img class="win98-svg-icon" src="assets/win98-icons/puzzle.png" alt="">页面内容</button>
+          <button class="btn" data-tab="editor" id="new-article-btn"><img class="win98-svg-icon" src="assets/win98-icons/document.png" alt="">写新文章</button>
           <button class="btn danger" id="logout-btn">退出登录</button>
         </div>
 
         <div id="tab-overview" class="tab-pane hidden">
           <div class="win mb16">
-            <div class="win-title"><span class="win-label">📊 站点概览</span><span class="win-dots"><span class="dot"></span></span></div>
+            <div class="win-title"><span class="win-label"><img class="win98-svg-icon" src="assets/win98-icons/dashboard.png" alt=""> 站点概览</span><span class="win-dots"><span class="dot"></span></span></div>
             <div class="win-body">
               <div id="stats-grid" class="stats-grid"><p class="muted px12">加载中…</p></div>
               <div class="mt16">
@@ -73,7 +73,7 @@
             </div>
           </div>
           <div class="win">
-            <div class="win-title"><span class="win-label">📢 公告</span><span class="win-dots"><span class="dot"></span></span></div>
+            <div class="win-title"><span class="win-label"><img class="win98-svg-icon" src="assets/win98-icons/book.png" alt=""> 公告</span><span class="win-dots"><span class="dot"></span></span></div>
             <div class="win-body">
               <div id="ann-alert"></div>
               <form id="ann-form">
@@ -112,29 +112,29 @@
         </div>
 
         <div id="tab-site" class="tab-pane hidden">
-          <div class="win"><div class="win-title"><span class="win-label">🧩 站点内容管理</span></div><div class="win-body">
+          <div class="win"><div class="win-title"><span class="win-label"><img class="win98-svg-icon" src="assets/win98-icons/puzzle.png" alt=""> 站点内容管理</span></div><div class="win-body">
             <p class="muted mb8">不用写 JSON，填表就行。技能、社交、项目、友链每项一行，空行不会保存。</p>
             <div id="site-alert"></div>
             <form id="site-form">
               <div class="form-row"><label for="site-bio">个人简介</label><textarea class="field" id="site-bio" rows="4" maxlength="5000"></textarea></div>
 
               <div class="site-block">
-                <div class="site-block-head"><strong>技能</strong><button type="button" class="btn btn-sm" data-add-site="skills">＋ 添加</button></div>
+                <div class="site-block-head"><strong>技能</strong><button type="button" class="btn btn-sm" data-add-site="skills">+ 添加</button></div>
                 <div id="site-skills-rows" class="site-rows"></div>
               </div>
 
               <div class="site-block">
-                <div class="site-block-head"><strong>社交平台</strong><button type="button" class="btn btn-sm" data-add-site="social">＋ 添加</button></div>
+                <div class="site-block-head"><strong>社交平台</strong><button type="button" class="btn btn-sm" data-add-site="social">+ 添加</button></div>
                 <div id="site-social-rows" class="site-rows"></div>
               </div>
 
               <div class="site-block">
-                <div class="site-block-head"><strong>项目简介</strong><button type="button" class="btn btn-sm" data-add-site="projects">＋ 添加</button></div>
+                <div class="site-block-head"><strong>项目简介</strong><button type="button" class="btn btn-sm" data-add-site="projects">+ 添加</button></div>
                 <div id="site-projects-rows" class="site-rows"></div>
               </div>
 
               <div class="site-block">
-                <div class="site-block-head"><strong>友情链接</strong><button type="button" class="btn btn-sm" data-add-site="friends">＋ 添加</button></div>
+                <div class="site-block-head"><strong>友情链接</strong><button type="button" class="btn btn-sm" data-add-site="friends">+ 添加</button></div>
                 <div id="site-friends-rows" class="site-rows"></div>
               </div>
 
@@ -144,7 +144,7 @@
         </div>
         <div id="tab-bot" class="tab-pane hidden">
           <div class="win">
-            <div class="win-title"><span class="win-label">🤖 机器人设置</span><span class="win-dots"><span class="dot"></span></span></div>
+            <div class="win-title"><span class="win-label"><img class="win98-svg-icon" src="assets/win98-icons/robot.png" alt=""> 机器人设置</span><span class="win-dots"><span class="dot"></span></span></div>
             <div class="win-body">
               <div id="bot-alert"></div>
               <form id="bot-form">
@@ -191,7 +191,7 @@
                 </div>
                 <div class="form-row">
                   <label><input type="checkbox" id="e-pinned" style="margin-right:4px">置顶文章</label>
-                  <span class="hint">排在文章列表最前，带 📌 标记</span>
+                  <span class="hint">排在文章列表最前，带<img class="win98-svg-icon" src="assets/win98-icons/pin.png" alt="">标记</span>
                 </div>
                 <div class="form-row">
                   <label>图片</label>
@@ -262,8 +262,8 @@
 
   <footer class="footer">
     <div class="footer-row">
-      <span>管理后台 · <a href="index.html">← 返回首页</a></span>
-      <span>Vibe Coding 产物 · <a class="admin-link" href="index.html">小戡的博客</a></span>
+      <span>管理后台 | <a href="index.html">← 返回首页</a></span>
+      <span>Vibe Coding 产物 | <a class="admin-link" href="index.html">小戡的博客</a></span>
     </div>
   </footer>
 
@@ -277,11 +277,11 @@
   <script src="js/admin.js"></script>
 
   <!-- AI 机器人 -->
-  <button class="chat-fab" id="chat-fab" title="和机器人聊聊">🤖 找机器人</button>
+  <button class="chat-fab" id="chat-fab" title="和机器人聊聊"><img class="win98-svg-icon" src="assets/win98-icons/robot.png" alt=""> 找机器人</button>
   <div class="chat-window win" id="chat-window">
-    <div class="win-title"><span class="win-label">🤖 机器人</span><button class="chat-close" id="chat-close" title="关闭">✕</button></div>
+    <div class="win-title"><span class="win-label"><img class="win98-svg-icon" src="assets/win98-icons/robot.png" alt=""> 机器人</span><button class="chat-close" id="chat-close" title="关闭">✕</button></div>
     <div class="chat-body" id="chat-msgs">
-      <div class="chat-msg bot"><div class="chat-nick">🤖 机器人</div><div class="chat-text">你好呀，我是小戡的博客机器人，随便聊！</div></div>
+      <div class="chat-msg bot"><div class="chat-nick"><img class="win98-svg-icon" src="assets/win98-icons/robot.png" alt=""> 机器人</div><div class="chat-text">你好呀，我是小戡的博客机器人，随便聊！</div></div>
     </div>
     <div class="chat-typing" id="chat-typing" style="display:none">机器人正在思考…</div>
     <div class="chat-input-row">

@@ -29,10 +29,10 @@
       var tags = tagsOf(a).map(function (t) {
         return '<span class="article-tag" data-tag="' + esc(t) + '">#' + esc(t) + "</span>";
       }).join(" ");
-      var pin = a.pinned ? "📌 " : "";
+      var pin = a.pinned ? Blog.icon("pin") + " " : "";
       html += '<div class="article-row">' +
         '<a href="article.html?slug=' + encodeURIComponent(a.slug) + '">' + pin + esc(a.title) + "</a>" +
-        '<span class="article-date">' + esc(Blog.fmtDate(a.created_at)) + " · " + (a.views || 0) + " 次浏览" + (tags ? " · " + tags : "") + "</span>" +
+        '<span class="article-date">' + esc(Blog.fmtDate(a.created_at)) + " | " + (a.views || 0) + " 次浏览" + (tags ? " | " + tags : "") + "</span>" +
         "</div>";
     });
     box.innerHTML = html;
@@ -98,13 +98,13 @@
     var arch = viewBtn.dataset.arch === "1";
     if (arch) {
       viewBtn.dataset.arch = "0";
-      viewBtn.textContent = "📂 归档";
+      viewBtn.innerHTML = Blog.icon("folder") + " 归档";
       if (tagBox) tagBox.style.display = "";
       if (searchInput) searchInput.style.display = "";
       render();
     } else {
       viewBtn.dataset.arch = "1";
-      viewBtn.textContent = "📖 列表";
+      viewBtn.innerHTML = Blog.icon("document") + " 列表";
       if (tagBox) tagBox.style.display = "none";
       if (searchInput) searchInput.style.display = "none";
       renderArchive();

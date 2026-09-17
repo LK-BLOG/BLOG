@@ -23,6 +23,5 @@ export async function onRequest(context: { request: Request; params: { path?: st
 
   const resp = await fetch(target, init as RequestInit);
   const outHeaders = new Headers(resp.headers);
-  outHeaders.set("Access-Control-Allow-Origin", "*");
   return new Response(resp.body, { status: resp.status, headers: outHeaders });
 }

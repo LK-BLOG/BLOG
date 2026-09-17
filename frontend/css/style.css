@@ -4,6 +4,26 @@
    ============================================================ */
 
 :root {
+  --ui-font: "MinecraftAE", "W95FA", Tahoma, "MS Sans Serif", "SimSun", "宋体", sans-serif;
+}
+
+@font-face {
+  font-family: "MinecraftAE";
+  src: url("../assets/fonts/minecraft-ae.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "W95FA";
+  src: url("../assets/fonts/w95fa.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
   --face: #c0c0c0;          /* 经典灰色面板 */
   --face-light: #dfdfdf;
   --window-bg: #ffffff;
@@ -25,7 +45,8 @@ html { scroll-behavior: smooth; }
 body {
   background: var(--face);
   color: var(--text);
-  font-family: Tahoma, "MS Sans Serif", "SimSun", "宋体", sans-serif;
+  font-family: var(--ui-font);
+  -webkit-font-smoothing: none;
   font-size: 14px;
   line-height: 1.55;
   min-height: 100vh;
@@ -38,6 +59,28 @@ a:visited { color: var(--visited); }
 img { max-width: 100%; }
 button { font-family: inherit; }
 h1, h2, h3, h4 { font-weight: bold; }
+
+.win98-svg-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  vertical-align: -3px;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+.win-title .win98-svg-icon,
+.btn .win98-svg-icon,
+.chat-fab .win98-svg-icon {
+  width: 15px;
+  height: 15px;
+  margin-right: 4px;
+}
+.icon96 .win98-svg-icon {
+  width: 32px;
+  height: 32px;
+  vertical-align: 0;
+  margin-right: 0;
+}
 
 /* ===== 滚动条 ===== */
 ::-webkit-scrollbar { width: 16px; height: 16px; }
@@ -159,13 +202,15 @@ h1, h2, h3, h4 { font-weight: bold; }
   outline-offset: 2px;
 }
 .desktop-icon .icon96 {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 44px; height: 44px;
   margin: 0 auto 6px;
   background: var(--face);
   color: var(--text);
   font-size: 24px;
-  line-height: 42px;
+  line-height: 0;
   border: 2px solid;
   border-color: var(--hl) var(--dark) var(--dark) var(--hl);
   box-shadow: 1px 1px 0 rgba(0,0,0,.4);
@@ -597,7 +642,7 @@ th { background: var(--face); }
   z-index: 200;
   background: var(--os-desktop);
   color: var(--os-text);
-  font-family: Tahoma, "MS Sans Serif", "SimSun", sans-serif;
+  font-family: var(--ui-font);
 }
 .os-desktop {
   position: absolute;
@@ -620,7 +665,8 @@ th { background: var(--face); }
   background: transparent;
   color: var(--os-icon-text);
   text-shadow: 1px 1px 0 #000;
-  font: 12px Tahoma, "SimSun", sans-serif;
+  font-family: var(--ui-font);
+  font-size: 12px;
   text-align: center;
   cursor: default;
 }
@@ -631,9 +677,38 @@ th { background: var(--face); }
 }
 .os-icon-img {
   display: block;
-  font-size: 32px;
-  line-height: 1.1;
-  margin-bottom: 4px;
+  width: 32px;
+  height: 32px;
+  line-height: 0;
+  margin: 0 auto 4px;
+}
+.os-svg-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  vertical-align: -3px;
+  image-rendering: pixelated;
+  flex: 0 0 auto;
+}
+.os-icon-img .os-svg-icon {
+  width: 32px;
+  height: 32px;
+}
+.os-start-logo .os-svg-icon {
+  width: 20px;
+  height: 20px;
+  vertical-align: -5px;
+}
+.os-menu-arrow {
+  margin-left: auto;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid #000;
+}
+.os-start-items button:hover .os-menu-arrow {
+  border-left-color: #fff;
 }
 .os-windows { position: absolute; inset: 0; pointer-events: none; }
 .os-window {
@@ -694,7 +769,9 @@ th { background: var(--face); }
   border-color: #fff #000 #000 #fff;
   background: #c0c0c0;
   color: #000;
-  font: bold 11px Tahoma, sans-serif;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: bold;
   line-height: 1;
   cursor: default;
 }
@@ -742,7 +819,9 @@ th { background: var(--face); }
   border-color: #fff #000 #000 #fff;
   background: var(--os-taskbar);
   color: var(--os-text);
-  font: bold 13px Tahoma, "SimSun", sans-serif;
+  font-family: var(--ui-font);
+  font-size: 13px;
+  font-weight: bold;
   white-space: nowrap;
   cursor: default;
 }
@@ -807,12 +886,16 @@ th { background: var(--face); }
   padding: 3px;
 }
 .os-start-items button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   border: 0;
   background: transparent;
   color: var(--os-text);
   padding: 7px 9px;
   text-align: left;
-  font: 14px Tahoma, "SimSun", sans-serif;
+  font-family: var(--ui-font);
+  font-size: 14px;
   cursor: default;
 }
 .os-start-items button:hover { background: var(--os-titlebar); color: #fff; }
@@ -843,12 +926,16 @@ th { background: var(--face); }
   box-shadow: 3px 3px 0 rgba(0, 0, 0, .45);
 }
 .os-submenu button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   border: 0;
   background: transparent;
   color: var(--os-text);
   padding: 7px 9px;
   text-align: left;
-  font: 14px Tahoma, "SimSun", sans-serif;
+  font-family: var(--ui-font);
+  font-size: 14px;
   cursor: default;
 }
 .os-submenu button:hover { background: var(--os-titlebar); color: #fff; }
@@ -870,7 +957,8 @@ th { background: var(--face); }
   color: var(--os-text);
   padding: 6px 9px;
   text-align: left;
-  font: 13px Tahoma, "SimSun", sans-serif;
+  font-family: var(--ui-font);
+  font-size: 13px;
   cursor: default;
 }
 .os-context-menu button:hover { background: var(--os-titlebar); color: #fff; }
@@ -904,7 +992,9 @@ th { background: var(--face); }
   color: #fff;
 }
 .os-boot-logo {
-  font: bold 42px Tahoma, "MS Sans Serif", sans-serif;
+  font-family: var(--ui-font);
+  font-size: 42px;
+  font-weight: bold;
   letter-spacing: 2px;
 }
 .os-boot-bar {
@@ -938,3 +1028,12 @@ body.embedded .chat-fab,
 body.embedded .chat-window { display: none !important; }
 body.embedded main { padding: 0; }
 body.embedded .section { max-width: none; margin: 0; padding: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

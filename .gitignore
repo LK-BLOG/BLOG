@@ -8,3 +8,5 @@ node_modules/
 .dev.vars
 pylock.toml
 python_modules/
+frontend/assets/fonts/minecraft-ae.ttf
+frontend/assets/win98-icons/*.svg

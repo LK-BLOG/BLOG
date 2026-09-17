@@ -5,16 +5,16 @@
   if (window.__XIAOKAN_EMBEDDED__) return;
 
   var APPS = [
-    { id: "home", title: "我的电脑", icon: "🖥", url: "index.html" },
-    { id: "articles", title: "文章", icon: "📄", url: "articles.html" },
-    { id: "guestbook", title: "留言板", icon: "💬", url: "guestbook.html" },
-    { id: "about", title: "关于", icon: "👤", url: "about.html" },
-    { id: "friends", title: "友链", icon: "🤝", url: "friends.html" },
-    { id: "chat", title: "机器人", icon: "🤖", special: "chat" },
-    { id: "admin", title: "管理", icon: "⚙", url: "admin.html" }
+    { id: "home", title: "我的电脑", icon: "computer", url: "index.html" },
+    { id: "articles", title: "文章", icon: "document", url: "articles.html" },
+    { id: "guestbook", title: "留言板", icon: "mail", url: "guestbook.html" },
+    { id: "about", title: "关于", icon: "about", url: "about.html" },
+    { id: "friends", title: "友链", icon: "friends", url: "friends.html" },
+    { id: "chat", title: "机器人", icon: "robot", special: "chat" },
+    { id: "admin", title: "管理", icon: "settings", url: "admin.html" }
   ];
   var HIDDEN_APPS = [
-    { id: "login", title: "登录 / 注册", icon: "🔑", url: "login.html" }
+    { id: "login", title: "登录 / 注册", icon: "key", url: "login.html" }
   ];
 
   var shell = null;
@@ -34,6 +34,10 @@
     return node;
   }
 
+  function icon(name, className) {
+    return '<img class="os-svg-icon ' + (className || "") + '" src="assets/win98-icons/' + name + '.png" alt="">';
+  }
+
   function appById(id) {
     var all = APPS.concat(HIDDEN_APPS);
     for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
@@ -48,6 +52,8 @@
     if (shell) return;
     shell = make("div", "os-shell hidden");
     shell.id = "os-shell";
+    shell.setAttribute("role", "application");
+    shell.setAttribute("aria-label", "小戡 OS 桌面");
     shell.innerHTML =
       '<div class="os-desktop" id="os-desktop">' +
         '<div class="os-icons" id="os-icons"></div>' +
@@ -59,7 +65,7 @@
         '<div class="os-boot-text">正在启动...</div>' +
       '</div>' +
       '<div class="os-taskbar">' +
-        '<button class="os-start-btn" id="os-start-btn" type="button"><span class="os-start-logo">⊞</span>开始</button>' +
+        '<button class="os-start-btn" id="os-start-btn" type="button"><span class="os-start-logo">' + icon("windows") + '</span>开始</button>' +
         '<div class="os-tasks" id="os-tasks"></div>' +
         '<div class="os-tray">' +
           '<select class="os-theme-select" data-theme-select aria-label="主题">' +
@@ -73,35 +79,35 @@
         '<div class="os-start-side">小戡 OS</div>' +
         '<div class="os-start-items">' +
           '<div class="os-start-group">' +
-            '<button type="button" data-os-sub="programs">📁 程序 <span>▸</span></button>' +
+            '<button type="button" data-os-sub="programs">' + icon("folder") + ' 程序 <span class="os-menu-arrow"></span></button>' +
             '<div class="os-submenu hidden">' +
-              '<button type="button" data-os-open="home">🖥 我的电脑</button>' +
-              '<button type="button" data-os-open="articles">📄 文章</button>' +
-              '<button type="button" data-os-open="guestbook">💬 留言板</button>' +
-              '<button type="button" data-os-open="chat">🤖 机器人</button>' +
-              '<button type="button" data-os-open="login">🔑 登录 / 注册</button>' +
-              '<button type="button" data-os-open="admin">⚙ 管理</button>' +
+              '<button type="button" data-os-open="home">' + icon("computer") + ' 我的电脑</button>' +
+              '<button type="button" data-os-open="articles">' + icon("document") + ' 文章</button>' +
+              '<button type="button" data-os-open="guestbook">' + icon("guestbook") + ' 留言板</button>' +
+              '<button type="button" data-os-open="chat">' + icon("robot") + ' 机器人</button>' +
+              '<button type="button" data-os-open="login">' + icon("key") + ' 登录 / 注册</button>' +
+              '<button type="button" data-os-open="admin">' + icon("settings") + ' 管理</button>' +
             '</div>' +
           '</div>' +
           '<div class="os-start-group">' +
-            '<button type="button" data-os-sub="documents">📄 文档 <span>▸</span></button>' +
+            '<button type="button" data-os-sub="documents">' + icon("document") + ' 文档 <span class="os-menu-arrow"></span></button>' +
             '<div class="os-submenu hidden">' +
               '<button type="button" data-os-open="articles">最新文章</button>' +
               '<button type="button" data-os-open="guestbook">留言记录</button>' +
             '</div>' +
           '</div>' +
           '<div class="os-start-group">' +
-            '<button type="button" data-os-sub="settings">⚙ 设置 <span>▸</span></button>' +
+            '<button type="button" data-os-sub="settings">' + icon("settings") + ' 设置 <span class="os-menu-arrow"></span></button>' +
             '<div class="os-submenu hidden">' +
               '<button type="button" data-os-theme="normal">切换到 Normal</button>' +
               '<button type="button" data-os-theme="os">保持 OS</button>' +
             '</div>' +
           '</div>' +
-          '<button type="button" data-os-open="about">❓ 帮助</button>' +
-          '<button type="button" data-os-open="articles">🔍 查找</button>' +
-          '<button type="button" data-os-run="1">▶ 运行...</button>' +
+          '<button type="button" data-os-open="about">' + icon("help") + ' 帮助</button>' +
+          '<button type="button" data-os-open="articles">' + icon("search") + ' 查找</button>' +
+          '<button type="button" data-os-run="1">' + icon("run") + ' 运行...</button>' +
           '<div class="os-start-sep"></div>' +
-          '<button type="button" data-os-shutdown="1">⏻ 关闭系统...</button>' +
+          '<button type="button" data-os-shutdown="1">' + icon("power") + ' 关闭系统...</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(shell);
@@ -109,6 +115,7 @@
     windowsBox = document.getElementById("os-windows");
     tasksBox = document.getElementById("os-tasks");
     startMenu = document.getElementById("os-start-menu");
+    startMenu.setAttribute("role", "menu");
     clockEl = document.getElementById("os-clock");
     var themeSelect = shell.querySelector("[data-theme-select]");
     if (themeSelect) themeSelect.value = document.documentElement.getAttribute("data-theme") || "normal";
@@ -121,17 +128,17 @@
   function renderIcons() {
     var box = document.getElementById("os-icons");
     APPS.forEach(function (app) {
-      var icon = make("button", "os-icon", '<span class="os-icon-img">' + app.icon + '</span><span>' + app.title + '</span>');
-      icon.type = "button";
-      icon.dataset.app = app.id;
-      icon.title = "双击打开";
-      bindIcon(icon, function () { openApp(app.id); });
-      box.appendChild(icon);
+      var item = make("button", "os-icon", '<span class="os-icon-img">' + icon(app.icon) + '</span><span>' + app.title + '</span>');
+      item.type = "button";
+      item.dataset.app = app.id;
+      item.title = "双击打开";
+      bindIcon(item, function () { openApp(app.id); });
+      box.appendChild(item);
     });
-    var bin = make("button", "os-icon", '<span class="os-icon-img">🗑</span><span>回收站</span>');
+    var bin = make("button", "os-icon", '<span class="os-icon-img">' + icon("recycle") + '</span><span>回收站</span>');
     bin.type = "button";
     bin.title = "双击打开";
-    bindIcon(bin, function () { openSpecial("bin", "回收站", '<div class="os-empty">回收站是空的。</div>'); });
+    bindIcon(bin, function () { openSpecial("bin", "回收站", '<div class="os-empty">回收站是空的。</div>', null, "recycle"); });
     box.appendChild(bin);
   }
 
@@ -254,7 +261,7 @@
             win.style.top = (36 + (index % 6) * 20) + "px";
           });
         } else if (action === "properties") {
-          openSpecial("sysinfo", "系统属性", '<div class="os-special"><p><strong>小戡 OS</strong></p><p>博客 WebOS 主题 / Win98 风格</p><p class="muted">主题：' + document.documentElement.getAttribute("data-theme") + '</p></div>');
+          openSpecial("sysinfo", "系统属性", '<div class="os-special"><p><strong>小戡 OS</strong></p><p>博客 WebOS 主题 / Win98 风格</p><p class="muted">主题：' + document.documentElement.getAttribute("data-theme") + '</p></div>', null, "settings");
         }
       });
     }
@@ -275,10 +282,14 @@
         var app = APPS.filter(function (item) { return item.url === value || item.id === value; })[0];
         closeWindow(win);
         if (app) openApp(app.id);
-        else openSpecial("run-result", "运行", '<div class="os-dialog">找不到：' + value + "</div>");
+        else {
+          var result = openSpecial("run-result", "运行", '<div class="os-dialog">找不到：<span data-run-missing></span></div>', null, "run");
+          var missing = result.querySelector("[data-run-missing]");
+          if (missing) missing.textContent = value;
+        }
       });
       win.querySelector("[data-run-cancel]").addEventListener("click", function () { closeWindow(win); });
-    });
+    }, "run");
   }
 
   function openShutdownDialog() {
@@ -292,7 +303,7 @@
         showBoot();
       });
       win.querySelector("[data-shutdown-cancel]").addEventListener("click", function () { closeWindow(win); });
-    });
+    }, "power");
   }
 
   function showBoot() {
@@ -314,6 +325,9 @@
     }
     var win = make("div", "os-window");
     win.dataset.app = id;
+    win.setAttribute("role", "dialog");
+    win.setAttribute("aria-label", app.title);
+    win.tabIndex = -1;
     var url = app.url;
     if (app.id === "login") {
       var next = new URLSearchParams(location.search).get("next") || "index.html";
@@ -321,11 +335,11 @@
     }
     win.innerHTML =
       '<div class="os-titlebar">' +
-        '<div class="os-titlebar-text"><span>' + app.icon + '</span><span>' + app.title + '</span></div>' +
+        '<div class="os-titlebar-text">' + icon(app.icon) + '<span>' + app.title + '</span></div>' +
         '<div class="os-titlebar-buttons">' +
-          '<button type="button" class="os-win-min" title="最小化">_</button>' +
-          '<button type="button" class="os-win-max" title="最大化">□</button>' +
-          '<button type="button" class="os-win-close" title="关闭">✕</button>' +
+          '<button type="button" class="os-win-min" title="最小化" aria-label="最小化">_</button>' +
+          '<button type="button" class="os-win-max" title="最大化" aria-label="最大化">□</button>' +
+          '<button type="button" class="os-win-close" title="关闭" aria-label="关闭">✕</button>' +
         '</div>' +
       '</div>' +
       '<div class="os-window-content"><iframe src="' + embedUrl(url) + '" title="' + app.title + '"></iframe></div>';
@@ -346,19 +360,22 @@
     }
   }
 
-  function openSpecial(id, title, html, onReady) {
+  function openSpecial(id, title, html, onReady, iconName) {
     var existing = windowsBox.querySelector('.os-window[data-app="' + id + '"]');
     if (existing) { restoreWindow(existing); focusWindow(existing); if (onReady) onReady(existing); return existing; }
     var win = make("div", "os-window");
     win.dataset.app = id;
+    win.setAttribute("role", "dialog");
+    win.setAttribute("aria-label", title);
+    win.tabIndex = -1;
     win.innerHTML =
-      '<div class="os-titlebar"><div class="os-titlebar-text"><span>🗑</span><span>' + title + '</span></div>' +
-      '<div class="os-titlebar-buttons"><button type="button" class="os-win-min">_</button><button type="button" class="os-win-max">□</button><button type="button" class="os-win-close">✕</button></div></div>' +
+      '<div class="os-titlebar"><div class="os-titlebar-text">' + icon(iconName || "recycle") + '<span>' + title + '</span></div>' +
+      '<div class="os-titlebar-buttons"><button type="button" class="os-win-min" aria-label="最小化">_</button><button type="button" class="os-win-max" aria-label="最大化">□</button><button type="button" class="os-win-close" aria-label="关闭">✕</button></div></div>' +
       '<div class="os-window-content os-special">' + html + '</div>';
     windowsBox.appendChild(win);
     placeWindow(win);
     bindWindow(win);
-    createTask({ id: id, title: title, icon: "🗑" }, win);
+    createTask({ id: id, title: title, icon: iconName || "recycle" }, win);
     focusWindow(win);
     if (onReady) onReady(win);
     return win;
@@ -405,7 +422,7 @@
   }
 
   function createTask(app, win) {
-    var btn = make("button", "os-task", '<span>' + app.icon + '</span><span>' + app.title + '</span>');
+    var btn = make("button", "os-task", icon(app.icon) + '<span>' + app.title + '</span>');
     btn.type = "button";
     btn.dataset.app = app.id;
     btn.addEventListener("click", function () {

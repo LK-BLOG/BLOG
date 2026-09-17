@@ -18,7 +18,6 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from workers import WorkerEntrypoint
 
@@ -91,14 +90,6 @@ description: 模仿小戡说话（从他 3100+ 条真实 Codex/Claude 对话里�
 
 app = FastAPI()
 
-# 公开 API，前端在 pages.dev 域，Worker 在 workers.dev 域，放开跨域
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 SLUG_RE = re.compile(r"^[A-Za-z0-9_-]{1,120}$")
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{2,20}$")
 EMAIL_RE = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$")
@@ -113,6 +104,14 @@ EMAIL_CODE_TTL_SECONDS = 600
 EMAIL_CODE_MAX_ATTEMPTS = 5
 EMAIL_CODE_RESEND_SECONDS = 60
 EMAIL_CODE_DAILY_LIMIT = 10
+EMAIL_GLOBAL_MINUTE_LIMIT = 10
+EMAIL_GLOBAL_HOUR_LIMIT = 50
+EMAIL_GLOBAL_DAY_LIMIT = 200
+EMAIL_OUTBOX_KEEP_SECONDS = 7 * 86400
+EMAIL_VERIFICATION_KEEP_SECONDS = 7 * 86400
+RATE_LIMIT_KEEP_SECONDS = 7 * 86400
+AUDIT_KEEP_SECONDS = 180 * 86400
+ARTICLE_VIEW_COOLDOWN_SECONDS = 3600
 
 
 # ---------- 工具 ----------
@@ -155,15 +154,121 @@ def _valid_email(email: str) -> bool:
 def _email_code_secret(env) -> str:
     secret = str(getattr(env, "EMAIL_CODE_SECRET", "") or "")
     if not secret:
-        secret = _auth_secret(env)
-    if not secret:
-        raise HTTPException(status_code=500, detail="服务端未配置邮件验证密钥")
+        raise HTTPException(status_code=500, detail="服务端未配置 EMAIL_CODE_SECRET")
     return secret
 
 
 def _hash_email_code(code: str, email: str, purpose: str, env) -> str:
     raw = ("%s|%s|%s" % (code, email, purpose)).encode("utf-8")
     return hmac.new(_email_code_secret(env).encode("utf-8"), raw, hashlib.sha256).hexdigest()
+
+
+def _seal_email_body(body: str, env) -> str:
+    """用 EMAIL_CODE_SECRET 做带认证的流式 XOR 加密，别让验证码明文落库。"""
+    secret = _email_code_secret(env).encode("utf-8")
+    nonce = os.urandom(16)
+    raw = str(body or "").encode("utf-8")
+    out = bytearray()
+    counter = 0
+    while len(out) < len(raw):
+        block = hmac.new(secret, nonce + counter.to_bytes(8, "big"), hashlib.sha256).digest()
+        out.extend(block)
+        counter += 1
+    cipher = bytes(a ^ b for a, b in zip(raw, out))
+    tag = hmac.new(secret, nonce + cipher, hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(nonce + cipher + tag).decode("ascii")
+
+
+def _open_email_body(sealed: str, env) -> str:
+    try:
+        blob = base64.urlsafe_b64decode(sealed.encode("ascii"))
+        nonce, cipher, tag = blob[:16], blob[16:-32], blob[-32:]
+        secret = _email_code_secret(env).encode("utf-8")
+        expected = hmac.new(secret, nonce + cipher, hashlib.sha256).digest()
+        if not hmac.compare_digest(tag, expected):
+            return ""
+        out = bytearray()
+        counter = 0
+        while len(out) < len(cipher):
+            block = hmac.new(secret, nonce + counter.to_bytes(8, "big"), hashlib.sha256).digest()
+            out.extend(block)
+            counter += 1
+        raw = bytes(a ^ b for a, b in zip(cipher, out))
+        return raw.decode("utf-8")
+    except Exception:
+        return ""
+
+
+def _safe_site_url(value) -> str:
+    url = str(value or "").strip()
+    if not url:
+        return ""
+    if len(url) > 500:
+        raise HTTPException(status_code=400, detail="链接太长")
+    if not (url.startswith("https://") or url.startswith("http://")):
+        raise HTTPException(status_code=400, detail="链接只能以 http:// 或 https:// 开头")
+    return url
+
+
+def _public_site_url(request: Request) -> str:
+    configured = str(getattr(request.scope.get("env"), "PUBLIC_SITE_URL", "") or "").strip()
+    if configured:
+        return configured.rstrip("/")
+    origin = str(request.headers.get("origin") or "").strip().rstrip("/")
+    if origin.startswith("https://") or origin.startswith("http://"):
+        return origin
+    return "https://xiaokan-esn.pages.dev"
+
+
+async def _consume_quota(db, key: str, window_seconds: int, limit: int) -> bool:
+    now = int(time.time())
+    window_start = now - (now % window_seconds)
+    row = await db.prepare(
+        "SELECT window_start, count FROM email_send_quotas WHERE key = ?"
+    ).bind(key).first()
+    if row and int(row["window_start"]) == window_start and int(row["count"]) >= limit:
+        return False
+    if row and int(row["window_start"]) == window_start:
+        await db.prepare(
+            "UPDATE email_send_quotas SET count = count + 1 WHERE key = ?"
+        ).bind(key).run()
+    else:
+        await db.prepare(
+            "INSERT INTO email_send_quotas (key, window_start, count) VALUES (?, ?, 1) "
+            "ON CONFLICT(key) DO UPDATE SET window_start = excluded.window_start, count = 1"
+        ).bind(key, window_start).run()
+    return True
+
+
+async def _email_global_send_allowed(db) -> None:
+    checks = (
+        ("email:minute", 60, EMAIL_GLOBAL_MINUTE_LIMIT),
+        ("email:hour", 3600, EMAIL_GLOBAL_HOUR_LIMIT),
+        ("email:day", 86400, EMAIL_GLOBAL_DAY_LIMIT),
+    )
+    for key, window, limit in checks:
+        if not await _consume_quota(db, key, window, limit):
+            raise HTTPException(status_code=429, detail="站点发信额度已满，请稍后再试")
+
+
+async def _cleanup_stale(db) -> None:
+    now = int(time.time())
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(seconds=EMAIL_OUTBOX_KEEP_SECONDS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    audit_cutoff = (datetime.now(timezone.utc) - timedelta(seconds=AUDIT_KEEP_SECONDS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    await db.prepare("DELETE FROM email_verifications WHERE created_ts < ?").bind(now - EMAIL_VERIFICATION_KEEP_SECONDS).run()
+    await db.prepare("DELETE FROM email_auth_rate_limits WHERE last_sent_ts < ?").bind(now - RATE_LIMIT_KEEP_SECONDS).run()
+    await db.prepare("DELETE FROM email_send_quotas WHERE window_start < ?").bind(now - RATE_LIMIT_KEEP_SECONDS).run()
+    await db.prepare("DELETE FROM login_rate_limits WHERE locked_until < ?").bind(now - RATE_LIMIT_KEEP_SECONDS).run()
+    await db.prepare("DELETE FROM rate_limits WHERE last_post_at < ?").bind(now - RATE_LIMIT_KEEP_SECONDS).run()
+    await db.prepare("DELETE FROM comment_rate_limits WHERE last_post_at < ?").bind(now - RATE_LIMIT_KEEP_SECONDS).run()
+    await db.prepare("DELETE FROM register_rate_limits WHERE last_post_at < ?").bind(now - RATE_LIMIT_KEEP_SECONDS).run()
+    await db.prepare("DELETE FROM register_daily_limits WHERE date < ?").bind(
+        (datetime.now(SHANGHAI_TZ) - timedelta(seconds=RATE_LIMIT_KEEP_SECONDS)).strftime("%Y-%m-%d")
+    ).run()
+    await db.prepare("DELETE FROM article_view_limits WHERE last_view_at < ?").bind(now - RATE_LIMIT_KEEP_SECONDS).run()
+    await db.prepare("DELETE FROM email_outbox WHERE created_at < ?").bind(cutoff_iso).run()
+    await db.prepare("DELETE FROM audit_log WHERE created_at < ?").bind(audit_cutoff).run()
+    await db.prepare("DELETE FROM reports WHERE status = 'handled' AND created_at < ?").bind(cutoff_iso).run()
 
 
 async def _email_send_allowed(db, key: str) -> None:
@@ -210,18 +315,24 @@ async def _send_email_via_gmail_script(env, to_email: str, subject: str, body: s
 
 
 async def _queue_email(db, env, to_email: str, subject: str, body: str) -> None:
+    await _email_global_send_allowed(db)
+    cipher = _seal_email_body(body, env)
     try:
         sent = await _send_email_via_gmail_script(env, to_email, subject, body)
-    except HTTPException as exc:
+    except Exception as exc:
+        detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
         await db.prepare(
-            "INSERT INTO email_outbox (to_email, subject, body, status, error, created_at) "
-            "VALUES (?, ?, ?, 'failed', ?, ?)"
-        ).bind(to_email, subject, body, str(exc.detail)[:500], _now_iso()).run()
-        raise
+            "INSERT INTO email_outbox (to_email, subject, body, body_cipher, status, error, created_at) "
+            "VALUES (?, ?, '', ?, 'failed', ?, ?)"
+        ).bind(to_email, subject, cipher, detail[:500], _now_iso()).run()
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(status_code=502, detail="Gmail 脚本调用失败")
     await db.prepare(
-        "INSERT INTO email_outbox (to_email, subject, body, status, created_at, sent_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)"
-    ).bind(to_email, subject, body, "sent" if sent else "pending", _now_iso(), _now_iso() if sent else None).run()
+        "INSERT INTO email_outbox (to_email, subject, body, body_cipher, status, created_at, sent_at) "
+        "VALUES (?, ?, '', ?, ?, ?, ?)"
+    ).bind(to_email, subject, cipher, "sent" if sent else "pending", _now_iso(), _now_iso() if sent else None).run()
+    await _cleanup_stale(db)
 
 
 async def _create_email_verification(db, env, user_id: int, email: str, purpose: str) -> None:
@@ -292,15 +403,22 @@ TOKEN_TTL_DAYS = 30
 
 
 def _auth_secret(env) -> str:
-    return str(getattr(env, "ADMIN_PASSWORD", "") or "")
+    return str(getattr(env, "AUTH_SECRET", "") or "")
 
 
-def _make_token(username: str, role: str, env, ttl_days: int = TOKEN_TTL_DAYS) -> str:
+def _admin_auth_version(env) -> int:
+    try:
+        return max(1, int(str(getattr(env, "ADMIN_AUTH_VERSION", "") or "1")))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _make_token(username: str, role: str, env, auth_version: int = 0, ttl_days: int = TOKEN_TTL_DAYS) -> str:
     secret = _auth_secret(env)
     if not secret:
-        raise HTTPException(status_code=500, detail="服务端未配置 ADMIN_PASSWORD")
+        raise HTTPException(status_code=500, detail="服务端未配置 AUTH_SECRET")
     exp = int(time.time()) + ttl_days * 86400
-    raw = "%s|%s|%d" % (username, role, exp)
+    raw = "%s|%s|%d|%d" % (username, role, exp, int(auth_version))
     payload = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
     sig = hmac.new(secret.encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()
     return payload + "." + sig
@@ -316,9 +434,9 @@ def _parse_token(auth: str, env):
     try:
         payload = base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4)).decode("utf-8")
         parts = payload.split("|")
-        if len(parts) != 3:
+        if len(parts) != 4:
             return None
-        username, role, exp = parts[0], parts[1], int(parts[2])
+        username, role, exp, auth_version = parts[0], parts[1], int(parts[2]), int(parts[3])
     except Exception:
         return None
     if role not in ("admin", "moderator", "user") or not username:
@@ -328,7 +446,7 @@ def _parse_token(auth: str, env):
     secret = _auth_secret(env)
     if not secret:
         return None
-    raw = "%s|%s|%d" % (username, role, exp)
+    raw = "%s|%s|%d|%d" % (username, role, exp, auth_version)
     expected = hmac.new(
         secret.encode("utf-8"),
         raw.encode("utf-8"),
@@ -336,24 +454,59 @@ def _parse_token(auth: str, env):
     ).hexdigest()
     if not hmac.compare_digest(sig, expected):
         return None
-    return (username, role)
+    return (username, role, auth_version)
 
 
-def _require_auth(request: Request):
+async def _auth_optional(request: Request):
     parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
     if not parsed:
+        return None
+    username, role, auth_version = parsed
+    env = request.scope["env"]
+    if username == "admin":
+        if role != "admin" or auth_version != _admin_auth_version(env):
+            return None
+        return (username, "admin", 0, True)
+    row = await _db(request).prepare(
+        "SELECT id, role, banned, banned_until, email_verified, auth_version "
+        "FROM users WHERE username = ?"
+    ).bind(username).first()
+    if not row:
+        return None
+    if row["role"] != role or int(row["auth_version"] or 0) != auth_version:
+        return None
+    if await _auto_unban_if_expired(_db(request), row["id"], row["banned"], row["banned_until"]):
+        return None
+    return (username, row["role"], row["id"], bool(row["email_verified"]))
+
+
+async def _require_auth(request: Request):
+    parsed = await _auth_optional(request)
+    if not parsed:
         raise HTTPException(status_code=401, detail="请先登录")
-    return parsed
+    return parsed[0], parsed[1]
 
 
-def _check_admin(request: Request) -> None:
-    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+async def _require_verified_user(request: Request):
+    username, role = await _require_auth(request)
+    if role == "admin":
+        return username, role
+    row = await _db(request).prepare(
+        "SELECT email_verified FROM users WHERE username = ?"
+    ).bind(username).first()
+    if not row or not row["email_verified"]:
+        raise HTTPException(status_code=403, detail="请先绑定并验证邮箱")
+    return username, role
+
+
+async def _check_admin(request: Request) -> None:
+    parsed = await _auth_optional(request)
     if not parsed or parsed[1] != "admin":
         raise HTTPException(status_code=401, detail="未授权，请重新登录")
 
 
-def _check_moderator(request: Request) -> None:
-    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+async def _check_moderator(request: Request) -> None:
+    parsed = await _auth_optional(request)
     if not parsed or parsed[1] not in ("admin", "moderator"):
         raise HTTPException(status_code=401, detail="未授权，请重新登录")
 
@@ -516,6 +669,7 @@ async def login(body: LoginIn, request: Request):
     username = body.username.strip()
     db = _db(request)
     ip = _client_ip(request)
+    await _cleanup_stale(db)
 
     remaining = await _login_remaining(db, ip, username)
     if remaining:
@@ -523,16 +677,16 @@ async def login(body: LoginIn, request: Request):
 
     ok = False
     if username == "admin":
-        admin_password = _auth_secret(env)
+        admin_password = str(getattr(env, "ADMIN_PASSWORD", "") or "")
         if not admin_password:
             raise HTTPException(status_code=500, detail="服务端未配置管理员密码")
-        ok = hmac.compare_digest(body.password, admin_password)
+        ok = hmac.compare_digest(body.password.encode("utf-8"), admin_password.encode("utf-8"))
         if ok:
             await _clear_login_fails(db, ip, username)
-            return {"token": _make_token("admin", "admin", env), "username": "admin", "role": "admin", "display_name": "骆戡"}
+            return {"token": _make_token("admin", "admin", env, _admin_auth_version(env)), "username": "admin", "role": "admin", "display_name": "骆戡"}
     elif USERNAME_RE.match(username):
         row = await db.prepare(
-            "SELECT id, password_hash, role, banned, banned_until, display_name FROM users WHERE username = ?"
+            "SELECT id, password_hash, role, banned, banned_until, display_name, auth_version FROM users WHERE username = ?"
         ).bind(username).first()
         if row:
             still_banned = await _auto_unban_if_expired(db, row["id"], row["banned"], row["banned_until"])
@@ -541,7 +695,7 @@ async def login(body: LoginIn, request: Request):
         ok = bool(row) and _verify_password(body.password, row["password_hash"])
         if ok:
             await _clear_login_fails(db, ip, username)
-            return {"token": _make_token(username, row["role"], env), "username": username, "role": row["role"], "display_name": row["display_name"] or username}
+            return {"token": _make_token(username, row["role"], env, int(row["auth_version"] or 0)), "username": username, "role": row["role"], "display_name": row["display_name"] or username}
 
     await _record_login_fail(db, ip, username)
     raise HTTPException(status_code=401, detail="用户名或密码错误")
@@ -565,10 +719,10 @@ async def register(body: RegisterIn, request: Request):
     db = _db(request)
     dup = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
     if dup:
-        raise HTTPException(status_code=409, detail="用户名已被占用")
+        raise HTTPException(status_code=409, detail="用户名或邮箱不可用")
     dup_email = await db.prepare("SELECT id FROM users WHERE email = ? COLLATE NOCASE").bind(email).first()
     if dup_email:
-        raise HTTPException(status_code=409, detail="邮箱已被占用")
+        raise HTTPException(status_code=409, detail="用户名或邮箱不可用")
     ip = _client_ip(request)
     now_ts = int(time.time())
     today = _today_str()
@@ -602,7 +756,7 @@ async def register(body: RegisterIn, request: Request):
         "VALUES (?, ?, 'user', ?, ?, 0, ?)"
     ).bind(username, _hash_password(body.password), display_name, email, _now_iso()).run()
     return {
-        "token": _make_token(username, "user", request.scope["env"]),
+        "token": _make_token(username, "user", request.scope["env"], 0),
         "username": username,
         "role": "user",
         "display_name": display_name,
@@ -613,7 +767,7 @@ async def register(body: RegisterIn, request: Request):
 
 @app.get("/api/me")
 async def get_me(request: Request):
-    username, user_role = _require_auth(request)
+    username, user_role = await _require_auth(request)
     if username == "admin":
         return {
             "username": "admin",
@@ -642,7 +796,7 @@ async def get_me(request: Request):
 
 @app.put("/api/me")
 async def update_me(body: ProfileIn, request: Request):
-    username, user_role = _require_auth(request)
+    username, user_role = await _require_auth(request)
     if user_role == "admin":
         raise HTTPException(status_code=400, detail="管理员名称不可修改")
     display_name = body.display_name.strip()
@@ -657,15 +811,17 @@ async def update_me(body: ProfileIn, request: Request):
 
 @app.put("/api/me/password")
 async def change_password(body: PasswordIn, request: Request):
-    username, user_role = _require_auth(request)
+    username, user_role = await _require_auth(request)
     if user_role == "admin":
         raise HTTPException(status_code=400, detail="管理员密码请通过 Cloudflare 配置修改")
     db = _db(request)
     row = await db.prepare("SELECT password_hash FROM users WHERE username = ?").bind(username).first()
     if not row or not _verify_password(body.old_password, row["password_hash"]):
         raise HTTPException(status_code=400, detail="旧密码错误")
-    await db.prepare("UPDATE users SET password_hash = ? WHERE username = ?").bind(_hash_password(body.new_password), username).run()
-    await _log_audit(db, _actor(request), "reset_password", "user", None, username)
+    await db.prepare(
+        "UPDATE users SET password_hash = ?, auth_version = auth_version + 1 WHERE username = ?"
+    ).bind(_hash_password(body.new_password), username).run()
+    await _log_audit(db, await _actor(request), "reset_password", "user", None, username)
     return {"ok": True}
 
 
@@ -673,7 +829,7 @@ async def change_password(body: PasswordIn, request: Request):
 
 @app.post("/api/me/email/code")
 async def request_email_bind_code(body: EmailCodeIn, request: Request):
-    username, user_role = _require_auth(request)
+    username, user_role = await _require_auth(request)
     if user_role == "admin":
         raise HTTPException(status_code=400, detail="管理员账号不支持邮箱绑定")
     email = _normalize_email(body.email)
@@ -687,7 +843,7 @@ async def request_email_bind_code(body: EmailCodeIn, request: Request):
         "SELECT id FROM users WHERE email = ? COLLATE NOCASE AND id <> ?"
     ).bind(email, user["id"]).first()
     if dup:
-        raise HTTPException(status_code=409, detail="这个邮箱已经绑定了别的账号")
+        raise HTTPException(status_code=409, detail="邮箱不可用")
     await _email_send_allowed(db, "user:%s:bind" % username)
     await _create_email_verification(db, request.scope["env"], user["id"], email, "bind")
     return {"ok": True, "delivery": "queued"}
@@ -695,7 +851,7 @@ async def request_email_bind_code(body: EmailCodeIn, request: Request):
 
 @app.post("/api/me/email/verify")
 async def verify_email_bind(body: EmailVerifyIn, request: Request):
-    username, user_role = _require_auth(request)
+    username, user_role = await _require_auth(request)
     if user_role == "admin":
         raise HTTPException(status_code=400, detail="管理员账号不支持邮箱绑定")
     email = _normalize_email(body.email)
@@ -709,7 +865,7 @@ async def verify_email_bind(body: EmailVerifyIn, request: Request):
         "SELECT id FROM users WHERE email = ? COLLATE NOCASE AND id <> ?"
     ).bind(email, user["id"]).first()
     if dup:
-        raise HTTPException(status_code=409, detail="这个邮箱已经绑定了别的账号")
+        raise HTTPException(status_code=409, detail="邮箱不可用")
     if not await _verify_email_code(db, request.scope["env"], user["id"], email, "bind", body.code):
         raise HTTPException(status_code=400, detail="验证码无效或已过期")
     await db.prepare(
@@ -760,7 +916,7 @@ async def confirm_password_reset(body: PasswordResetConfirmIn, request: Request)
     if not await _verify_email_code(db, request.scope["env"], user["id"], user["email"], "reset", body.code):
         raise HTTPException(status_code=400, detail="验证码无效或已过期")
     await db.prepare(
-        "UPDATE users SET password_hash = ? WHERE id = ?"
+        "UPDATE users SET password_hash = ?, auth_version = auth_version + 1 WHERE id = ?"
     ).bind(_hash_password(body.new_password), user["id"]).run()
     await _clear_login_fails(db, _client_ip(request), user["username"])
     await _log_audit(db, "email-reset", "reset_password", "user", user["id"], user["username"])
@@ -772,7 +928,7 @@ async def confirm_password_reset(body: PasswordResetConfirmIn, request: Request)
 @app.get("/api/articles")
 async def list_articles(request: Request):
     db = _db(request)
-    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    parsed = await _auth_optional(request)
     is_admin = bool(parsed and parsed[1] == "admin")
     show_all = request.query_params.get("all") == "1" and is_admin
     if show_all:
@@ -795,17 +951,27 @@ async def get_article(slug: str, request: Request):
     if not row:
         raise HTTPException(status_code=404, detail="文章不存在")
     if row["status"] == "draft":
-        parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+        parsed = await _auth_optional(request)
         if not parsed or parsed[1] != "admin":
             raise HTTPException(status_code=404, detail="文章不存在")
-    await db.prepare("UPDATE articles SET views = views + 1 WHERE slug = ?").bind(slug).run()
-    row["views"] = int(row.get("views") or 0) + 1
+    ip = _client_ip(request)
+    now_ts = int(time.time())
+    view = await db.prepare(
+        "SELECT last_view_at FROM article_view_limits WHERE article_slug = ? AND ip = ?"
+    ).bind(slug, ip).first()
+    if not view or now_ts - int(view["last_view_at"]) >= ARTICLE_VIEW_COOLDOWN_SECONDS:
+        await db.prepare(
+            "INSERT INTO article_view_limits (article_slug, ip, last_view_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(article_slug, ip) DO UPDATE SET last_view_at = excluded.last_view_at"
+        ).bind(slug, ip, now_ts).run()
+        await db.prepare("UPDATE articles SET views = views + 1 WHERE slug = ?").bind(slug).run()
+        row["views"] = int(row.get("views") or 0) + 1
     return row
 
 
 @app.post("/api/articles")
 async def create_article(body: ArticleIn, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     slug = body.slug.strip()
     if not SLUG_RE.match(slug):
         raise HTTPException(status_code=400, detail="slug 只能包含字母、数字、中划线、下划线（1-120 位）")
@@ -820,31 +986,31 @@ async def create_article(body: ArticleIn, request: Request):
     await db.prepare(
         "INSERT INTO articles (slug, title, content_md, tags, status, pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(slug, body.title.strip(), body.content_md, tags, status, pinned, now, now).run()
-    await _log_audit(db, _actor(request), "create_article", "article", None, slug)
+    await _log_audit(db, await _actor(request), "create_article", "article", None, slug)
     return {"ok": True, "slug": slug}
 
 
 @app.put("/api/articles/{slug}")
 async def update_article(slug: str, body: ArticleIn, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     db = _db(request)
     res = await db.prepare(
         "UPDATE articles SET title = ?, content_md = ?, tags = ?, status = ?, pinned = ?, updated_at = ? WHERE slug = ?"
     ).bind(body.title.strip(), body.content_md, body.tags.strip(), body.status, body.pinned, _now_iso(), slug).run()
     if not res.meta.changes:
         raise HTTPException(status_code=404, detail="文章不存在")
-    await _log_audit(db, _actor(request), "update_article", "article", None, slug)
+    await _log_audit(db, await _actor(request), "update_article", "article", None, slug)
     return {"ok": True, "slug": slug}
 
 
 @app.delete("/api/articles/{slug}")
 async def delete_article(slug: str, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     db = _db(request)
     res = await db.prepare("DELETE FROM articles WHERE slug = ?").bind(slug).run()
     if not res.meta.changes:
         raise HTTPException(status_code=404, detail="文章不存在")
-    await _log_audit(db, _actor(request), "delete_article", "article", None, slug)
+    await _log_audit(db, await _actor(request), "delete_article", "article", None, slug)
     return {"ok": True}
 
 
@@ -853,14 +1019,27 @@ async def delete_article(slug: str, request: Request):
 @app.get("/api/messages")
 async def list_messages(request: Request):
     db = _db(request)
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        per = min(100, max(1, int(request.query_params.get("per", 20))))
+    except (TypeError, ValueError):
+        per = 20
+    total_row = await db.prepare("SELECT COUNT(*) AS n FROM messages").first()
+    total = int(total_row["n"]) if total_row else 0
+    total_pages = max(1, (total + per - 1) // per)
+    page = min(page, total_pages)
     res = await db.prepare(
-        "SELECT id, nickname, content, created_at, user_id FROM messages ORDER BY id DESC LIMIT ?"
-    ).bind(MAX_MESSAGES).all()
-    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+        "SELECT id, nickname, content, created_at, user_id FROM messages "
+        "ORDER BY id DESC LIMIT ? OFFSET ?"
+    ).bind(per, (page - 1) * per).all()
+    parsed = await _auth_optional(request)
     can_mod = False
     my_id = None
     if parsed:
-        uname, role = parsed
+        uname, role = parsed[0], parsed[1]
         if role in ("admin", "moderator"):
             can_mod = True
         else:
@@ -870,7 +1049,7 @@ async def list_messages(request: Request):
     for m in res.results:
         m["is_mine"] = bool(can_mod or (my_id is not None and m.get("user_id") == my_id))
         out.append(m)
-    return {"messages": out}
+    return {"messages": out, "total": total, "page": page, "total_pages": total_pages, "per": per}
 
 
 @app.post("/api/messages")
@@ -879,25 +1058,27 @@ async def create_message(body: MessageIn, request: Request):
     ip = _client_ip(request)
     now_ts = int(time.time())
     auth_header = request.headers.get("authorization", "")
-    parsed = _parse_token(auth_header, request.scope["env"])
+    parsed = await _auth_optional(request)
     if auth_header.strip() and not parsed:
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
     is_privileged = False
     user_id = None
     nickname = None
     if parsed:
-        username, role = parsed
+        username, role = parsed[0], parsed[1]
         if role in ("admin", "moderator"):
             is_privileged = True
         if role == "admin":
             nickname = "骆戡"
         else:
-            urow = await db.prepare("SELECT id, display_name, banned FROM users WHERE username = ?").bind(username).first()
+            urow = await db.prepare("SELECT id, display_name, banned, email_verified FROM users WHERE username = ?").bind(username).first()
             if urow and urow["banned"]:
                 raise HTTPException(status_code=403, detail="账号已被封禁")
             if urow:
                 user_id = urow["id"]
                 nickname = urow["display_name"] or username
+                if not urow["email_verified"]:
+                    raise HTTPException(status_code=403, detail="请先绑定并验证邮箱")
     if nickname is None:
         nickname = (body.nickname or "").strip()
         if not nickname:
@@ -922,10 +1103,10 @@ async def create_message(body: MessageIn, request: Request):
 @app.delete("/api/messages/{message_id}")
 async def delete_message(message_id: int, request: Request):
     db = _db(request)
-    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    parsed = await _auth_optional(request)
     if not parsed:
         raise HTTPException(status_code=401, detail="请先登录")
-    username, role = parsed
+    username, role = parsed[0], parsed[1]
     row = await db.prepare("SELECT id, user_id FROM messages WHERE id = ?").bind(message_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="留言不存在")
@@ -934,7 +1115,7 @@ async def delete_message(message_id: int, request: Request):
         if not urow or row["user_id"] is None or urow["id"] != row["user_id"]:
             raise HTTPException(status_code=403, detail="只能删除自己的留言")
     await db.prepare("DELETE FROM messages WHERE id = ?").bind(message_id).run()
-    await _log_audit(db, _actor(request), "delete_message", "message", message_id)
+    await _log_audit(db, await _actor(request), "delete_message", "message", message_id)
     return {"ok": True}
 
 
@@ -973,11 +1154,11 @@ async def list_comments(slug: str, request: Request):
         selected.extend(descendants(t["id"]))
     selected.sort(key=lambda c: c["id"])
 
-    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    parsed = await _auth_optional(request)
     can_mod = False
     my_id = None
     if parsed:
-        uname, role = parsed
+        uname, role = parsed[0], parsed[1]
         if role in ("admin", "moderator"):
             can_mod = True
             my_id = -1 if role == "admin" else my_id
@@ -1004,7 +1185,7 @@ async def list_comments(slug: str, request: Request):
 
 @app.post("/api/articles/{slug}/comments")
 async def create_comment(slug: str, body: MessageIn, request: Request):
-    username, user_role = _require_auth(request)
+    username, user_role = await _require_verified_user(request)
     db = _db(request)
     article = await db.prepare("SELECT id, title, content_md FROM articles WHERE slug = ?").bind(slug).first()
     if not article:
@@ -1091,11 +1272,11 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
         if user_cmt_id:
             await db.prepare(
                 "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, NULL, ?, 1)"
-            ).bind(slug, "🤖 小戡的机器人", reply, _now_iso(), user_cmt_id).run()
+            ).bind(slug, "小戡的机器人", reply, _now_iso(), user_cmt_id).run()
         else:
             await db.prepare(
                 "INSERT INTO comments (article_slug, nickname, content, created_at, user_id, parent_id, is_bot) VALUES (?, ?, ?, ?, NULL, ?, 1)"
-            ).bind(slug, "🤖 小戡的机器人", reply, _now_iso(), parent_id).run()
+            ).bind(slug, "小戡的机器人", reply, _now_iso(), parent_id).run()
         return {"ok": True, "bot_reply": reply}
 
 
@@ -1107,7 +1288,7 @@ async def create_comment(slug: str, body: MessageIn, request: Request):
 
 @app.get("/api/comments")
 async def list_all_comments(request: Request):
-    _check_moderator(request)
+    await _check_moderator(request)
     res = await _db(request).prepare(
         "SELECT c.id, c.article_slug, c.nickname, c.content, c.created_at, c.user_id, c.parent_id, c.is_bot, a.title AS article_title "
         "FROM comments c LEFT JOIN articles a ON a.slug = c.article_slug "
@@ -1119,10 +1300,10 @@ async def list_all_comments(request: Request):
 @app.delete("/api/comments/{comment_id}")
 async def delete_comment(comment_id: int, request: Request):
     db = _db(request)
-    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+    parsed = await _auth_optional(request)
     if not parsed:
         raise HTTPException(status_code=401, detail="请先登录")
-    username, role = parsed
+    username, role = parsed[0], parsed[1]
     row = await db.prepare("SELECT id, user_id FROM comments WHERE id = ?").bind(comment_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="评论不存在")
@@ -1137,12 +1318,12 @@ async def delete_comment(comment_id: int, request: Request):
         "SELECT c.id FROM comments c JOIN sub s ON c.parent_id = s.id"
         ") DELETE FROM comments WHERE id IN (SELECT id FROM sub)"
     ).bind(comment_id, comment_id).run()
-    await _log_audit(db, _actor(request), "delete_comment", "comment", comment_id)
+    await _log_audit(db, await _actor(request), "delete_comment", "comment", comment_id)
     return {"ok": True}
 
 @app.post("/api/comments/{comment_id}/like")
 async def toggle_like(comment_id: int, request: Request):
-    username, user_role = _require_auth(request)
+    username, user_role = await _require_auth(request)
     db = _db(request)
     row = await db.prepare("SELECT id FROM comments WHERE id = ?").bind(comment_id).first()
     if not row:
@@ -1201,7 +1382,7 @@ async def _robot_ban_user(db, user_id: int, username: str, now_ts: int) -> bool:
     if username == "admin":
         return False
     await db.prepare(
-        "UPDATE users SET banned = 1, banned_until = ? WHERE id = ?"
+        "UPDATE users SET banned = 1, banned_until = ?, auth_version = auth_version + 1 WHERE id = ?"
     ).bind(now_ts + ROBOT_BAN_DAYS * 86400, user_id).run()
     return True
 
@@ -1478,8 +1659,8 @@ def _today_str() -> str:
     return datetime.now(SHANGHAI_TZ).strftime("%Y-%m-%d")
 
 
-def _actor(request: Request) -> str:
-    parsed = _parse_token(request.headers.get("authorization", ""), request.scope["env"])
+async def _actor(request: Request) -> str:
+    parsed = await _auth_optional(request)
     return parsed[0] if parsed else "?"
 
 
@@ -1491,7 +1672,7 @@ async def _log_audit(db, actor: str, action: str, target_type: str = None, targe
 @app.post("/api/chat")
 async def chat(body: ChatIn, request: Request):
     env = request.scope["env"]
-    username, user_role = _require_auth(request)
+    username, user_role = await _require_verified_user(request)
     now_ts = int(time.time())
     db = _db(request)
 
@@ -1672,7 +1853,7 @@ async def chat(body: ChatIn, request: Request):
 
 @app.get("/api/settings")
 async def get_settings(request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     db = _db(request)
     raw = await _get_setting(db, "chat_daily_limit", "20")
     try:
@@ -1689,7 +1870,7 @@ async def get_settings(request: Request):
 
 @app.put("/api/settings")
 async def put_settings(body: SettingsIn, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     db = _db(request)
     await db.prepare(
         "INSERT INTO settings (key, value) VALUES ('chat_daily_limit', ?) "
@@ -1707,7 +1888,7 @@ async def put_settings(body: SettingsIn, request: Request):
 
 @app.get("/api/users")
 async def list_users(request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     res = await _db(request).prepare(
         "SELECT id, username, role, banned, display_name, email, email_verified, created_at "
         "FROM users ORDER BY id ASC"
@@ -1717,48 +1898,52 @@ async def list_users(request: Request):
 
 @app.put("/api/users/{username}")
 async def ban_user(username: str, body: UserBanIn, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     if username == "admin":
         raise HTTPException(status_code=400, detail="不能操作管理员账号")
     db = _db(request)
     row = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
     if not row:
         raise HTTPException(status_code=404, detail="用户不存在")
-    await db.prepare("UPDATE users SET banned = ?, banned_until = NULL WHERE username = ?").bind(1 if body.banned else 0, username).run()
-    await _log_audit(db, _actor(request), "ban" if body.banned else "unban", "user", None, username)
+    await db.prepare(
+        "UPDATE users SET banned = ?, banned_until = NULL, "
+        "auth_version = CASE WHEN ? = 1 THEN auth_version + 1 ELSE auth_version END "
+        "WHERE username = ?"
+    ).bind(1 if body.banned else 0, 1 if body.banned else 0, username).run()
+    await _log_audit(db, await _actor(request), "ban" if body.banned else "unban", "user", None, username)
     return {"ok": True, "username": username, "banned": body.banned}
 
 
 @app.put("/api/users/{username}/role")
 async def set_user_role(username: str, body: UserRoleIn, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     if username == "admin":
         raise HTTPException(status_code=400, detail="不能修改内置管理员账号")
     db = _db(request)
     row = await db.prepare("SELECT id FROM users WHERE username = ?").bind(username).first()
     if not row:
         raise HTTPException(status_code=404, detail="用户不存在")
-    await db.prepare("UPDATE users SET role = ? WHERE username = ?").bind(body.role, username).run()
-    await _log_audit(db, _actor(request), "set_role", "user", None, "%s -> %s" % (username, body.role))
+    await db.prepare("UPDATE users SET role = ?, auth_version = auth_version + 1 WHERE username = ?").bind(body.role, username).run()
+    await _log_audit(db, await _actor(request), "set_role", "user", None, "%s -> %s" % (username, body.role))
     return {"ok": True, "username": username, "role": body.role}
 
 
 @app.put("/api/users/{username}/password")
 async def reset_user_password(username: str, body: ResetPasswordIn, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     if username == "admin":
         raise HTTPException(status_code=400, detail="不能重置内置管理员密码")
     db = _db(request)
-    res = await db.prepare("UPDATE users SET password_hash = ? WHERE username = ?").bind(_hash_password(body.new_password), username).run()
+    res = await db.prepare("UPDATE users SET password_hash = ?, auth_version = auth_version + 1 WHERE username = ?").bind(_hash_password(body.new_password), username).run()
     if not res.meta.changes:
         raise HTTPException(status_code=404, detail="用户不存在")
-    await _log_audit(db, _actor(request), "admin_reset_password", "user", None, username)
+    await _log_audit(db, await _actor(request), "admin_reset_password", "user", None, username)
     return {"ok": True}
 
 
 @app.delete("/api/users/{username}")
 async def delete_user(username: str, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     if username == "admin":
         raise HTTPException(status_code=400, detail="不能删除管理员账号")
     db = _db(request)
@@ -1770,7 +1955,7 @@ async def delete_user(username: str, request: Request):
     await db.prepare("DELETE FROM user_chat_rate_limits WHERE user_id = ?").bind(uid).run()
     await db.prepare("DELETE FROM user_chat_daily_usage WHERE user_id = ?").bind(uid).run()
     await db.prepare("DELETE FROM email_verifications WHERE user_id = ?").bind(uid).run()
-    await _log_audit(db, _actor(request), "delete_user", "user", None, username)
+    await _log_audit(db, await _actor(request), "delete_user", "user", None, username)
     return {"ok": True, "username": username}
 
 
@@ -1778,17 +1963,23 @@ async def delete_user(username: str, request: Request):
 
 @app.get("/api/mail/outbox")
 async def list_mail_outbox(request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     res = await _db(request).prepare(
-        "SELECT id, to_email, subject, body, status, error, created_at, sent_at "
+        "SELECT id, to_email, subject, body, body_cipher, status, error, created_at, sent_at "
         "FROM email_outbox WHERE status = 'pending' ORDER BY id ASC LIMIT 20"
     ).all()
-    return {"emails": res.results}
+    env = request.scope["env"]
+    emails = []
+    for row in res.results:
+        item = dict(row)
+        item["body"] = _open_email_body(item.pop("body_cipher") or "", env) or item.get("body") or ""
+        emails.append(item)
+    return {"emails": emails}
 
 
 @app.post("/api/mail/outbox/{mail_id}/sent")
 async def mark_mail_sent(mail_id: int, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     res = await _db(request).prepare(
         "UPDATE email_outbox SET status = 'sent', sent_at = ?, error = NULL "
         "WHERE id = ? AND status = 'pending'"
@@ -1800,7 +1991,7 @@ async def mark_mail_sent(mail_id: int, request: Request):
 
 @app.post("/api/mail/outbox/{mail_id}/failed")
 async def mark_mail_failed(mail_id: int, body: MailFailureIn, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     res = await _db(request).prepare(
         "UPDATE email_outbox SET status = 'failed', error = ? "
         "WHERE id = ? AND status = 'pending'"
@@ -1814,7 +2005,7 @@ async def mark_mail_failed(mail_id: int, body: MailFailureIn, request: Request):
 
 @app.post("/api/reports")
 async def create_report(body: ReportIn, request: Request):
-    username, user_role = _require_auth(request)
+    username, user_role = await _require_verified_user(request)
     db = _db(request)
     if body.target_type == "comment":
         target = await db.prepare("SELECT id, nickname, content, user_id FROM comments WHERE id = ?").bind(body.target_id).first()
@@ -1872,7 +2063,7 @@ async def create_report(body: ReportIn, request: Request):
             author = await db.prepare("SELECT username, role FROM users WHERE id = ?").bind(target["user_id"]).first()
             if author and author["role"] == "user":
                 await db.prepare(
-                    "UPDATE users SET banned = 1, banned_until = ? WHERE id = ?"
+                    "UPDATE users SET banned = 1, banned_until = ?, auth_version = auth_version + 1 WHERE id = ?"
                 ).bind(now_ts + ROBOT_BAN_DAYS * 86400, target["user_id"]).run()
                 action = "deleted_banned"
     if report_id:
@@ -1882,7 +2073,7 @@ async def create_report(body: ReportIn, request: Request):
 
 @app.get("/api/reports")
 async def list_reports(request: Request):
-    _check_moderator(request)
+    await _check_moderator(request)
     res = await _db(request).prepare(
         "SELECT id, target_type, target_id, reason, reporter, status, content, created_at FROM reports ORDER BY id DESC LIMIT 100"
     ).all()
@@ -1893,7 +2084,7 @@ async def list_reports(request: Request):
 
 @app.get("/api/stats")
 async def stats(request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     db = _db(request)
 
     async def one(sql, *args):
@@ -1922,7 +2113,7 @@ async def stats(request: Request):
 
 @app.get("/api/export/{etype}")
 async def export_data(etype: str, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     db = _db(request)
     if etype == "articles":
         res = await db.prepare("SELECT slug, title, content_md, tags, status, views, created_at, updated_at FROM articles ORDER BY id").all()
@@ -1942,14 +2133,14 @@ async def export_data(etype: str, request: Request):
 
 @app.post("/api/reports/{report_id}/resolve")
 async def resolve_report(report_id: int, body: ReportResolveIn, request: Request):
-    _check_moderator(request)
+    await _check_moderator(request)
     db = _db(request)
     row = await db.prepare("SELECT id, target_type, target_id, status FROM reports WHERE id = ?").bind(report_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="举报不存在")
     if body.action == "ignore":
         await db.prepare("UPDATE reports SET status = 'handled' WHERE id = ?").bind(report_id).run()
-        await _log_audit(db, _actor(request), "ignore_report", "report", report_id, "%s:%s" % (row["target_type"], row["target_id"]))
+        await _log_audit(db, await _actor(request), "ignore_report", "report", report_id, "%s:%s" % (row["target_type"], row["target_id"]))
         return {"ok": True, "status": "ignored"}
     # delete: 先查作者再删
     target_user_id = None
@@ -1973,16 +2164,16 @@ async def resolve_report(report_id: int, body: ReportResolveIn, request: Request
     if body.ban and target_user_id:
         author = await db.prepare("SELECT username, role FROM users WHERE id = ?").bind(target_user_id).first()
         if author and author["role"] == "user":
-            await db.prepare("UPDATE users SET banned = 1, banned_until = NULL WHERE id = ?").bind(target_user_id).run()
+            await db.prepare("UPDATE users SET banned = 1, banned_until = NULL, auth_version = auth_version + 1 WHERE id = ?").bind(target_user_id).run()
             banned = True
     await db.prepare("UPDATE reports SET status = 'handled' WHERE id = ?").bind(report_id).run()
-    await _log_audit(db, _actor(request), "resolve_report", "report", report_id, "deleted%s" % ("+ban" if banned else ""))
+    await _log_audit(db, await _actor(request), "resolve_report", "report", report_id, "deleted%s" % ("+ban" if banned else ""))
     return {"ok": True, "status": "deleted", "banned": banned}
 
 
 @app.get("/api/audit")
 async def list_audit(request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     res = await _db(request).prepare(
         "SELECT id, actor, action, target_type, target_id, detail, created_at FROM audit_log ORDER BY id DESC LIMIT 200"
     ).all()
@@ -1997,41 +2188,85 @@ async def get_announcement(request: Request):
 
 @app.put("/api/announcement")
 async def put_announcement(body: AnnouncementIn, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     db = _db(request)
     text = body.text.strip()
     await db.prepare(
         "INSERT INTO settings (key, value) VALUES ('announcement', ?) "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     ).bind(text).run()
-    await _log_audit(db, _actor(request), "set_announcement", "setting", None, text[:60])
+    await _log_audit(db, await _actor(request), "set_announcement", "setting", None, text[:60])
     return {"ok": True, "text": text}
 
 
 # ---------- 可编辑站点内容 ----------
-SITE_CONTENT_DEFAULT = {"bio": "", "skills": [], "social": [], "projects": [], "friends": []}
+SITE_CONTENT_DEFAULT = {
+    "bio": (
+        "嗨，我是 小戡（骆戡），一个爱折腾的网络冲浪选手。\n"
+        "B 站 ID：玩Flip的刀盾 | GitHub：骆戡Campus。\n"
+        "这里是我 90 年代风格的网络小窝：写点文章、放点项目、摆个留言板，欢迎来串门。"
+    ),
+    "skills": [
+        {"name": "HTML", "url": "", "desc": "会一点：能写 h1、p、a 这种基础标签，再复杂的就交给 Vibe Coding 了。"},
+        {"name": "Python 3", "url": "", "desc": "会一点：写写小脚本，本站后端 API 就是 Python（FastAPI）跑的。"},
+        {"name": "Python 2", "url": "", "desc": "只会 print，懂的都懂。"},
+        {"name": "CSS / JS", "url": "", "desc": "不会，全靠 AI 帮我写——本站就是 Vibe Coding 的产物。"},
+        {"name": "折腾 & 整活", "url": "", "desc": "不会的就折腾着学，能跑起来就算成功。"},
+    ],
+    "social": [
+        {"name": "哔哩哔哩", "url": "https://space.bilibili.com/129131127", "desc": "玩Flip的刀盾 | UID：129131127"},
+        {"name": "GitHub", "url": "https://github.com/LK-BLOG", "desc": "骆戡Campus | github.com/LK-BLOG"},
+        {"name": "更多平台", "url": "", "desc": "后续再补（抖音 / 小红书 / 邮箱…）"},
+    ],
+    "projects": [
+        {"name": "PyClaw", "url": "https://github.com/LK-BLOG/PyClaw", "desc": "私人 AI 助手框架：桌面 / Web / CLI 全平台，也能当 Agent 跑；Windows 桌面打包版（PyClaw for Win）零配置、U 盘便携、低占用，下载即用。"},
+        {"name": "PyClaw-Lite", "url": "https://github.com/LK-BLOG/pyclaw-lite", "desc": "PyClaw 轻量版：一把 exec 走天下，没有花哨工具链，只有能自己动手的 AI 大脑。"},
+        {"name": "MollyPaw", "url": "https://github.com/LK-BLOG/MollyPaw", "desc": "一只小泰迪开发的跨平台 AI Agent 桌面客户端（Python + PyWebView），对接任意 LLM API。"},
+        {"name": "本博客", "url": "https://github.com/LK-BLOG/BLOG", "desc": "Win98 复古风个人主页：GitHub 存代码，Cloudflare Pages + Python Worker + D1 驱动。"},
+    ],
+    "friends": [],
+}
+
+
+def _normalize_site_content(data: dict) -> dict:
+    data = data if isinstance(data, dict) else {}
+    out = {"bio": str(data.get("bio") or "").strip()[:5000], "skills": [], "social": [], "projects": [], "friends": []}
+    for key in ("skills", "social", "projects", "friends"):
+        raw_items = data.get(key)
+        if not isinstance(raw_items, list):
+            continue
+        for item in raw_items[:100]:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()[:80]
+            desc = str(item.get("desc") or "").strip()[:300]
+            url = _safe_site_url(item.get("url"))
+            if name or desc or url:
+                out[key].append({"name": name, "url": url, "desc": desc})
+    return out
+
 
 @app.get("/api/site-content")
 async def get_site_content(request: Request):
     raw = await _get_setting(_db(request), "site_content", json.dumps(SITE_CONTENT_DEFAULT, ensure_ascii=False))
     try:
         data = json.loads(raw)
-        if not isinstance(data, dict): data = {}
     except Exception:
         data = {}
-    out = dict(SITE_CONTENT_DEFAULT); out.update(data)
-    return out
+    return _normalize_site_content(data)
 
 @app.put("/api/site-content")
 async def put_site_content(body: SiteContentIn, request: Request):
-    _check_admin(request)
-    data = dict(SITE_CONTENT_DEFAULT); data.update(body.content or {})
-    if not isinstance(data["bio"], str): data["bio"] = str(data["bio"])
+    await _check_admin(request)
+    raw = dict(SITE_CONTENT_DEFAULT)
+    raw.update(body.content or {})
     for key in ("skills", "social", "projects", "friends"):
-        if not isinstance(data[key], list): raise HTTPException(status_code=400, detail=f"{key} 必须是数组")
+        if not isinstance(raw.get(key), list):
+            raise HTTPException(status_code=400, detail=f"{key} 必须是数组")
+    data = _normalize_site_content(raw)
     db = _db(request)
     await db.prepare("INSERT INTO settings (key, value) VALUES ('site_content', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(json.dumps(data, ensure_ascii=False)).run()
-    await _log_audit(db, _actor(request), "set_site_content", "setting", None, "站点内容")
+    await _log_audit(db, await _actor(request), "set_site_content", "setting", None, "站点内容")
     return data
 # ---------- 图床（KV） ----------
 
@@ -2043,7 +2278,7 @@ ALLOWED_IMG = {
 
 @app.post("/api/upload")
 async def upload(body: UploadIn, request: Request):
-    _check_admin(request)
+    await _check_admin(request)
     fn = body.filename.lower()
     ext = fn.rsplit(".", 1)[-1] if "." in fn else ""
     if ext not in ALLOWED_IMG:
@@ -2087,9 +2322,9 @@ async def media(key: str, request: Request):
 @app.get("/api/feed.xml")
 async def feed(request: Request):
     res = await _db(request).prepare(
-        "SELECT slug, title, created_at FROM articles ORDER BY created_at DESC LIMIT 20"
+        "SELECT slug, title, created_at FROM articles WHERE status = 'published' ORDER BY created_at DESC LIMIT 20"
     ).all()
-    base = "https://xiaokan-esn.pages.dev"
+    base = html.escape(_public_site_url(request), quote=True)
     items = []
     for a in res.results:
         link = base + "/article.html?slug=" + a["slug"]
@@ -2109,9 +2344,9 @@ async def feed(request: Request):
 @app.get("/api/sitemap.xml")
 async def sitemap(request: Request):
     res = await _db(request).prepare(
-        "SELECT slug FROM articles ORDER BY id ASC"
+        "SELECT slug FROM articles WHERE status = 'published' ORDER BY id ASC"
     ).all()
-    base = "https://xiaokan-esn.pages.dev"
+    base = html.escape(_public_site_url(request), quote=True)
     urls = ["<url><loc>%s</loc></url>" % base]
     for a in res.results:
         urls.append("<url><loc>%s/article.html?slug=%s</loc></url>" % (base, a["slug"]))

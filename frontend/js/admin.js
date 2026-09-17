@@ -427,7 +427,8 @@
     if (!box) return;
     box.querySelectorAll("[data-export]").forEach(function (b) {
       b.addEventListener("click", function () {
-        location.href = "/api/export/" + b.dataset.export + "?t=" + Date.now();
+        Blog.download("/api/export/" + encodeURIComponent(b.dataset.export) + "?t=" + Date.now(), b.dataset.export + ".json")
+          .catch(function (err) { alert("导出失败：" + err.message); });
       });
     });
     var form = $("ann-form");
@@ -488,7 +489,7 @@
           : "<span class=\"tag tag-danger\">未绑定邮箱</span>";
         html += '<div class="user-card">' +
           '<div class="user-card-head">' + Blog.escapeHtml(u.username) + ' <span class="tag">' + roleTxt + '</span> <span class="tag ' + (u.banned ? "tag-danger" : "") + '">' + status + '</span></div>' +
-          '<div class="user-card-meta">名称：' + Blog.escapeHtml(u.display_name || "-") + " · ID " + u.id + "<br>" + emailText + "<br>" + Blog.escapeHtml(Blog.fmtDate(u.created_at)) + "</div>" +
+          '<div class="user-card-meta">名称：' + Blog.escapeHtml(u.display_name || "-") + " | ID " + u.id + "<br>" + emailText + "<br>" + Blog.escapeHtml(Blog.fmtDate(u.created_at)) + "</div>" +
           '<div class="user-card-ops">' + ops + "</div>" +
           "</div>";
       });
@@ -691,7 +692,7 @@
   function loadMessages() {
     var box = $("messages-manage");
     box.innerHTML = '<p class="muted px12">加载中…</p>';
-    Blog.api("/api/messages").then(function (data) {
+    Blog.api("/api/messages?per=100").then(function (data) {
       var list = (data && data.messages) || [];
       if (!list.length) {
         box.innerHTML = '<p class="muted px12">还没有留言。</p>';

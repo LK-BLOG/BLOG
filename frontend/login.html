@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>登录 - 小戡的博客</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <meta name="description" content="????? - ?? / ???">
+<meta name="description" content="小戡的博客 - 登录 / 注册 / 邮箱验证">
   <link rel="stylesheet" href="css/style.css">
   <style>
     .login-switch { text-align:center; margin-top:12px; font-size:13px; }
@@ -14,14 +14,14 @@
 </head>
 <body>
   <nav class="nav">
-    <div class="nav-brand"><a href="index.html"><span class="brand-icon">戡</span>小戡的博客 · 账号</a></div>
+    <div class="nav-brand"><a href="index.html"><span class="brand-icon">戡</span>小戡的博客 | 账号</a></div>
     <div class="nav-links"><a href="index.html">返回首页</a></div>
   </nav>
 
   <main>
     <section class="section" style="max-width:420px">
       <div class="win" style="margin:40px auto">
-        <div class="win-title"><span class="win-label">👤 登录 / 注册</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+        <div class="win-title"><span class="win-label"><img class="win98-svg-icon" src="assets/win98-icons/user.png" alt=""> 登录 / 注册</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
         <div class="win-body">
           <div id="login-alert"></div>
 
@@ -38,7 +38,7 @@
             <button type="submit" class="btn primary" style="width:100%">登录</button>
           </form>
 
-          <div class="login-switch">没有账号？<a id="goto-register">注册一个</a> · <a id="forgot-pw">忘记密码？</a></div>
+          <div class="login-switch">没有账号？<a id="goto-register">注册一个</a> | <a id="forgot-pw">忘记密码？</a></div>
 
           <form id="forgot-form" class="hidden" style="margin-top:12px;padding:10px;border:2px inset;border-color:#808080 #fff #fff #808080;background:#fff">
             <p class="muted mb8">邮箱验证重置密码。只有已绑定邮箱的账号会收到验证码。</p>
@@ -112,7 +112,8 @@
   (function () {
     "use strict";
     var $ = function (id) { return document.getElementById(id); };
-    var next = new URLSearchParams(location.search).get("next") || "index.html";
+    var requestedNext = new URLSearchParams(location.search).get("next") || "index.html";
+    var next = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(requestedNext) ? "index.html" : requestedNext;
     var pendingEmail = "";
 
     function show(msg, type) {
@@ -239,11 +240,11 @@
   </script>
 
   <!-- AI 机器人 -->
-  <button class="chat-fab" id="chat-fab" title="和机器人聊聊">🤖 找机器人</button>
+  <button class="chat-fab" id="chat-fab" title="和机器人聊聊"><img class="win98-svg-icon" src="assets/win98-icons/robot.png" alt=""> 找机器人</button>
   <div class="chat-window win" id="chat-window">
-    <div class="win-title"><span class="win-label">🤖 机器人</span><button class="chat-close" id="chat-close" title="关闭">✕</button></div>
+    <div class="win-title"><span class="win-label"><img class="win98-svg-icon" src="assets/win98-icons/robot.png" alt=""> 机器人</span><button class="chat-close" id="chat-close" title="关闭">✕</button></div>
     <div class="chat-body" id="chat-msgs">
-      <div class="chat-msg bot"><div class="chat-nick">🤖 机器人</div><div class="chat-text">你好呀，我是小戡的博客机器人，随便聊！</div></div>
+      <div class="chat-msg bot"><div class="chat-nick"><img class="win98-svg-icon" src="assets/win98-icons/robot.png" alt=""> 机器人</div><div class="chat-text">你好呀，我是小戡的博客机器人，随便聊！</div></div>
     </div>
     <div class="chat-typing" id="chat-typing" style="display:none">机器人正在思考…</div>
     <div class="chat-input-row">

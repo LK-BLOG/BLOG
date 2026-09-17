@@ -73,6 +73,31 @@
     });
   }
 
+  function download(path, filename) {
+    var headers = {};
+    var token = getToken();
+    if (token) headers["Authorization"] = "Bearer " + token;
+    return fetch(API + path, { headers: headers }).then(function (res) {
+      if (!res.ok) {
+        return res.json().catch(function () { return null; }).then(function (data) {
+          var err = new Error((data && data.detail) ? data.detail : ("HTTP " + res.status));
+          err.status = res.status;
+          throw err;
+        });
+      }
+      return res.blob();
+    }).then(function (blob) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "export.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    });
+  }
+
   function getToken() {
     try { return localStorage.getItem("xiaokan_token") || ""; } catch (e) { return ""; }
   }
@@ -108,6 +133,16 @@
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
+  function safeUrl(value) {
+    var url = String(value == null ? "" : value).trim();
+    return /^https?:\/\//i.test(url) ? url : "";
+  }
+
+  function icon(name, className) {
+    return '<img class="win98-svg-icon ' + escapeHtml(className || "") +
+      '" src="assets/win98-icons/' + escapeHtml(name) + '.png" alt="">';
+  }
+
   function fmtDate(iso) {
     if (!iso) return "";
     var d = new Date(iso);
@@ -129,7 +164,10 @@
           if (emptyText) box.innerHTML = '<div class="win"><div class="win-body"><p class="muted">' + escapeHtml(emptyText) + '</p></div></div>';
           return;
         }
-        box.innerHTML = items.map(function (x) { return '<div class="win"><div class="win-title"><span class="win-label">' + escapeHtml(x.name || "未命名") + '</span></div><div class="win-body"><p>' + escapeHtml(x.desc || "") + '</p>' + (x.url ? '<p class="mt8"><a class="btn" href="' + escapeHtml(x.url) + '" target="_blank" rel="noopener">打开 ↗</a></p>' : '') + '</div></div>'; }).join("");
+        box.innerHTML = items.map(function (x) {
+          var url = safeUrl(x.url);
+          return '<div class="win"><div class="win-title"><span class="win-label">' + escapeHtml(x.name || "未命名") + '</span></div><div class="win-body"><p>' + escapeHtml(x.desc || "") + '</p>' + (url ? '<p class="mt8"><a class="btn" href="' + escapeHtml(url) + '" target="_blank" rel="noopener">打开</a></p>' : '') + '</div></div>';
+        }).join("");
       }
       render("site-skills-list", d.skills, "后台还没加技能。");
       render("site-friends-list", d.friends, "还没有友链。想交换友链？留言板吱一声。");
@@ -208,6 +246,7 @@
 
   window.Blog = {
     api: api,
+    download: download,
     getToken: getToken,
     setToken: setToken,
     isAuthed: isAuthed,
@@ -218,6 +257,8 @@
     setUser: setUser,
     logout: logout,
     escapeHtml: escapeHtml,
+    safeUrl: safeUrl,
+    icon: icon,
     fmtDate: fmtDate,
     applyTheme: applyTheme
   };

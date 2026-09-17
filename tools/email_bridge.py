@@ -22,7 +22,7 @@ import urllib.error
 import urllib.request
 
 
-DEFAULT_API = "https://xiaokan-esn.pages.dev"
+DEFAULT_API = "https://xiaokan-api.gunmu1145.workers.dev"
 
 BROWSER_HEADERS = {
     "Accept": "application/json, text/plain, */*",
@@ -60,7 +60,7 @@ def cli_command():
     exe = shutil.which("agently-cli")
     if not exe:
         raise RuntimeError("找不到 agently-cli，先 npm install -g @tencent-qqmail/agently-cli")
-    if os.name == "nt" and exe.lower().endswith((".cmd", ".bat")):
+    if os.name == "nt" and exe.lower().endswith((".cmd", ".bat", ".ps1")):
         run_js = pathlib.Path(exe).resolve().parent / "node_modules" / "@tencent-qqmail" / "agently-cli" / "scripts" / "run.js"
         node = shutil.which("node")
         if node and run_js.exists():
