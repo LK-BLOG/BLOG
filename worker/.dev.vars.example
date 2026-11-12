@@ -5,3 +5,10 @@ ADMIN_AUTH_VERSION=1
 EMAIL_CODE_SECRET=随便一串够长的随机密钥
 GMAIL_SCRIPT_URL=粘贴 Apps Script Web 应用 URL
 GMAIL_SCRIPT_TOKEN=粘贴 Apps Script 里的 SECRET
+
+# GitHub 登录（GitHub OAuth App 的 Client ID / Client Secret）
+GITHUB_CLIENT_ID=粘贴 OAuth App 的 Client ID
+GITHUB_CLIENT_SECRET=粘贴 OAuth App 的 Client Secret
+# 回调地址必须和 GitHub OAuth App 里填的完全一致
+GITHUB_OAUTH_REDIRECT_URI=http://127.0.0.1:8787/api/auth/github/callback
+PUBLIC_SITE_URL=http://127.0.0.1:8000

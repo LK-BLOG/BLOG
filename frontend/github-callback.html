@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub 登录 - 小戡的博客</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-brand"><a href="index.html"><span class="brand-icon">戡</span>小戡的博客 | GitHub 登录</a></div>
+    <div class="nav-links"><a href="index.html">返回首页</a></div>
+  </nav>
+
+  <main>
+    <section class="section" style="max-width:420px">
+      <div class="win" style="margin:40px auto">
+        <div class="win-title"><span class="win-label"><img class="win98-svg-icon" src="assets/win98-icons/key.png" alt=""> GitHub 登录</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>
+        <div class="win-body">
+          <div id="gh-alert"><div class="alert ok">正在完成 GitHub 登录…</div></div>
+          <p class="muted mb8" id="gh-detail">拿到凭据后自动跳回去，别关页面。</p>
+          <a class="btn primary block" href="login.html">返回登录</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var $ = function (id) { return document.getElementById(id); };
+    function fail(msg) {
+      $("gh-alert").innerHTML = '<div class="alert error">' + Blog.escapeHtml(msg) + "</div>";
+      $("gh-detail").textContent = "回到登录页再试一次。";
+    }
+    var params = new URLSearchParams(location.hash.slice(1));
+    var token = params.get("token") || "";
+    if (!token) { fail("没拿到登录凭据，链接可能失效了"); return; }
+
+    var next = params.get("next") || "index.html";
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(next)) next = "index.html";
+
+    Blog.setToken(token);
+    Blog.setUser(params.get("username") || "", params.get("role") || "", params.get("display_name") || "");
+    if (history.replaceState) history.replaceState(null, "", "github-callback.html");
+    location.replace(next);
+  })();
+  </script>
+</body>
+</html>

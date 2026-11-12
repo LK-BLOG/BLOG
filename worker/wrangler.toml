@@ -17,6 +17,10 @@ compatibility_flags = ["python_workers", "python_dedicated_snapshot"]
 # 线上部署：npx wrangler secret put ADMIN_PASSWORD
 #           npx wrangler secret put AUTH_SECRET
 #           npx wrangler secret put EMAIL_CODE_SECRET
+#           npx wrangler secret put GITHUB_CLIENT_ID
+#           npx wrangler secret put GITHUB_CLIENT_SECRET
+# 可选：npx wrangler secret put GITHUB_OAUTH_REDIRECT_URI
+#       npx wrangler secret put PUBLIC_SITE_URL
 
 [[d1_databases]]
 binding = "DB"

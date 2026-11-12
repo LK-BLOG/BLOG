@@ -15,10 +15,12 @@ import secrets
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, Field, field_validator
+
 from workers import WorkerEntrypoint
 
 BLOGBOT_STYLE = r'''---
@@ -112,6 +114,12 @@ EMAIL_VERIFICATION_KEEP_SECONDS = 7 * 86400
 RATE_LIMIT_KEEP_SECONDS = 7 * 86400
 AUDIT_KEEP_SECONDS = 180 * 86400
 ARTICLE_VIEW_COOLDOWN_SECONDS = 3600
+OAUTH_STATE_TTL_SECONDS = 600
+GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
+GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
+GITHUB_USER_URL = "https://api.github.com/user"
+GITHUB_OAUTH_SCOPE = "read:user"
+DEFAULT_SITE_URL = "https://xiaokan-esn.pages.dev"
 
 
 # ---------- 工具 ----------
@@ -511,6 +519,161 @@ async def _check_moderator(request: Request) -> None:
         raise HTTPException(status_code=401, detail="未授权，请重新登录")
 
 
+# ---------- GitHub OAuth ----------
+
+def _safe_next_path(value) -> str:
+    raw = str(value or "").strip()
+    if not raw or len(raw) > 200:
+        return "index.html"
+    if raw.startswith("//") or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", raw):
+        return "index.html"
+    raw = raw.lstrip("/")
+    if not raw or not re.match(r"^[A-Za-z0-9_./?=&%#~-]+$", raw):
+        return "index.html"
+    return raw
+
+
+def _sign_oauth_state(next_path: str, env) -> str:
+    if not _auth_secret(env):
+        raise HTTPException(status_code=500, detail="服务端未配置 AUTH_SECRET")
+    raw = json.dumps(
+        {"n": next_path, "t": int(time.time()), "r": secrets.token_hex(8)},
+        separators=(",", ":"),
+    )
+    payload = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+    sig = hmac.new(_auth_secret(env).encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+    return payload + "." + sig
+
+
+def _read_oauth_state(state, env):
+    state = str(state or "").strip()
+    if "." not in state or not _auth_secret(env):
+        return None
+    payload, sig = state.rsplit(".", 1)
+    try:
+        raw = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)).decode("utf-8")
+        expected = hmac.new(_auth_secret(env).encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+        if not hmac.compare_digest(sig, expected):
+            return None
+        data = json.loads(raw)
+        if int(data.get("t") or 0) + OAUTH_STATE_TTL_SECONDS < int(time.time()):
+            return None
+        return _safe_next_path(data.get("n"))
+    except Exception:
+        return None
+
+
+def _github_env(env):
+    client_id = str(getattr(env, "GITHUB_CLIENT_ID", "") or "").strip()
+    client_secret = str(getattr(env, "GITHUB_CLIENT_SECRET", "") or "").strip()
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=503, detail="GitHub 登录还没配置好")
+    return client_id, client_secret
+
+
+def _site_base(request: Request) -> str:
+    env = request.scope.get("env")
+    site = str(getattr(env, "PUBLIC_SITE_URL", "") or "").strip().rstrip("/")
+    if not site:
+        callback = str(getattr(env, "GITHUB_OAUTH_REDIRECT_URI", "") or "").strip()
+        m = re.match(r"^(https?://[^/]+)", callback)
+        if m:
+            site = m.group(1)
+    if not (site.startswith("https://") or site.startswith("http://")):
+        site = DEFAULT_SITE_URL
+    return site
+
+
+def _github_callback_url(request: Request) -> str:
+    configured = str(getattr(request.scope.get("env"), "GITHUB_OAUTH_REDIRECT_URI", "") or "").strip()
+    if configured:
+        return configured
+    return _site_base(request) + "/api/auth/github/callback"
+
+
+async def _github_json(url: str, method: str = "GET", headers=None, body=None):
+    from workers import fetch
+    kwargs = {"method": method, "headers": headers or {}}
+    if body is not None:
+        kwargs["body"] = body
+    resp = await asyncio.wait_for(fetch(url, **kwargs), timeout=20)
+    text = await resp.text()
+    try:
+        data = json.loads(text) if text else {}
+    except (TypeError, ValueError):
+        data = {}
+    return int(resp.status), data
+
+
+def _github_noreply_email(github_id: str, login: str) -> str:
+    return ("%s+%s@users.noreply.github.com" % (github_id, login)).lower()
+
+
+async def _pick_github_username(db, login: str) -> str:
+    base = re.sub(r"[^A-Za-z0-9_]", "_", str(login or "")).strip("_")
+    if len(base) < 2:
+        base = "gh_" + secrets.token_hex(3)
+    base = base[:20]
+    if base.lower() == "admin":
+        base = base[:14] + "_" + secrets.token_hex(2)
+    candidate = base
+    for i in range(1, 20):
+        row = await db.prepare("SELECT id FROM users WHERE username = ?").bind(candidate).first()
+        if not row:
+            return candidate
+        suffix = "_%02d" % i
+        candidate = base[: max(1, 20 - len(suffix))] + suffix
+    return "gh_" + secrets.token_hex(4)
+
+
+async def _upsert_github_account(db, profile: dict) -> dict:
+    """GitHub 资料 -> 本站账号。按 noreply 邮箱认人，新号自动建。"""
+    github_id = str(profile.get("id") or "").strip()
+    github_login = str(profile.get("login") or "").strip()
+    if not github_id or not github_login:
+        raise HTTPException(status_code=502, detail="GitHub 返回的用户信息不完整")
+    email = _github_noreply_email(github_id, github_login)
+    row = await db.prepare(
+        "SELECT id, username, role, display_name, banned, banned_until, auth_version, email_verified "
+        "FROM users WHERE email = ? COLLATE NOCASE"
+    ).bind(email).first()
+
+    if row:
+        if not row["email_verified"]:
+            raise HTTPException(status_code=409, detail="这个邮箱被别的账号占用了，联系管理员处理")
+        if await _auto_unban_if_expired(db, row["id"], row["banned"], row["banned_until"]):
+            raise HTTPException(status_code=403, detail="账号已被封禁")
+        return {
+            "username": row["username"],
+            "role": row["role"],
+            "display_name": row["display_name"] or row["username"],
+            "user_id": row["id"],
+            "auth_version": int(row["auth_version"] or 0),
+            "email": email,
+        }
+
+    username = await _pick_github_username(db, github_login)
+    display_name = str(profile.get("name") or github_login).strip()[:30] or github_login
+    await db.prepare(
+        "INSERT INTO users (username, password_hash, role, display_name, email, email_verified, "
+        "auth_version, created_at) VALUES (?, ?, 'user', ?, ?, 1, 0, ?)"
+    ).bind(
+        username, "github$" + github_id, display_name, email, _now_iso()
+    ).run()
+    created = await db.prepare("SELECT id FROM users WHERE email = ? COLLATE NOCASE").bind(email).first()
+    if not created:
+        raise HTTPException(status_code=500, detail="创建账号失败，稍后再试")
+    await _log_audit(db, username, "register_github", "user", created["id"], github_login)
+    return {
+        "username": username,
+        "role": "user",
+        "display_name": display_name,
+        "user_id": created["id"],
+        "auth_version": 0,
+        "email": email,
+    }
+
+
 # ---------- 请求体 ----------
 
 class LoginIn(BaseModel):
@@ -535,7 +698,7 @@ class ArticleIn(BaseModel):
 
 
 class PasswordIn(BaseModel):
-    old_password: str = Field(min_length=1, max_length=200)
+    old_password: str = Field(default="", max_length=200)
     new_password: str = Field(min_length=6, max_length=72)
 
 
@@ -765,6 +928,121 @@ async def register(body: RegisterIn, request: Request):
     }
 
 
+@app.get("/api/auth/github/start")
+async def github_oauth_start(request: Request):
+    env = request.scope["env"]
+    try:
+        client_id, _ = _github_env(env)
+    except HTTPException as exc:
+        return RedirectResponse(
+            _site_base(request) + "/login.html?github_error=" + quote(str(exc.detail), safe=""),
+            status_code=302,
+            headers={"Cache-Control": "no-store"},
+        )
+    next_path = _safe_next_path(request.query_params.get("next"))
+    state = _sign_oauth_state(next_path, env)
+    params = urlencode({
+        "client_id": client_id,
+        "redirect_uri": _github_callback_url(request),
+        "scope": GITHUB_OAUTH_SCOPE,
+        "state": state,
+        "allow_signup": "true",
+    })
+    return RedirectResponse(
+        GITHUB_AUTHORIZE_URL + "?" + params,
+        status_code=302,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/api/auth/github/callback")
+async def github_oauth_callback(request: Request):
+    env = request.scope["env"]
+    site = _site_base(request)
+
+    def fail(message: str):
+        return RedirectResponse(
+            site + "/login.html?github_error=" + quote(message, safe=""),
+            status_code=302,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    code = (request.query_params.get("code") or "").strip()
+    state = request.query_params.get("state") or ""
+    if request.query_params.get("error"):
+        desc = request.query_params.get("error_description") or request.query_params.get("error")
+        return fail("GitHub 授权被拒绝：" + str(desc)[:100])
+    if not code:
+        return fail("GitHub 没有返回授权码，再试一次")
+    next_path = _read_oauth_state(state, env)
+    if next_path is None:
+        return fail("登录状态过期了，重新点一次 GitHub 登录")
+    try:
+        client_id, client_secret = _github_env(env)
+    except HTTPException:
+        return fail("GitHub 登录还没配置好")
+
+    try:
+        status, token_data = await _github_json(
+            GITHUB_TOKEN_URL,
+            method="POST",
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "xiaokan-blog",
+            },
+            body=json.dumps({
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "redirect_uri": _github_callback_url(request),
+            }),
+        )
+    except Exception:
+        return fail("连不上 GitHub，稍后再试")
+    access_token = str(token_data.get("access_token") or "")
+    if not access_token:
+        detail = str(token_data.get("error_description") or token_data.get("error") or ("HTTP %d" % status))
+        return fail("GitHub 授权失败：" + detail[:100])
+
+    try:
+        status, profile = await _github_json(
+            GITHUB_USER_URL,
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": "Bearer " + access_token,
+                "User-Agent": "xiaokan-blog",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )
+    except Exception:
+        return fail("拿不到 GitHub 用户信息，稍后再试")
+    github_id = str(profile.get("id") or "").strip()
+    github_login = str(profile.get("login") or "").strip()
+    if not github_id or not github_login:
+        return fail("GitHub 返回的用户信息不完整")
+
+    db = _db(request)
+    try:
+        account = await _upsert_github_account(db, profile)
+    except HTTPException as exc:
+        return fail(str(exc.detail))
+    await _log_audit(db, account["username"], "login_github", "user", account["user_id"], github_login)
+    token = _make_token(account["username"], account["role"], env, account["auth_version"])
+    query = urlencode({
+        "token": token,
+        "username": account["username"],
+        "role": account["role"],
+        "display_name": account["display_name"],
+        "next": next_path,
+    })
+    return RedirectResponse(
+        site + "/github-callback.html#" + query,
+        status_code=302,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/api/me")
 async def get_me(request: Request):
     username, user_role = await _require_auth(request)
@@ -816,7 +1094,10 @@ async def change_password(body: PasswordIn, request: Request):
         raise HTTPException(status_code=400, detail="管理员密码请通过 Cloudflare 配置修改")
     db = _db(request)
     row = await db.prepare("SELECT password_hash FROM users WHERE username = ?").bind(username).first()
-    if not row or not _verify_password(body.old_password, row["password_hash"]):
+    if not row:
+        raise HTTPException(status_code=401, detail="账号不存在，请重新登录")
+    oauth_only = str(row["password_hash"] or "").startswith("github$")
+    if not oauth_only and not _verify_password(body.old_password, row["password_hash"]):
         raise HTTPException(status_code=400, detail="旧密码错误")
     await db.prepare(
         "UPDATE users SET password_hash = ?, auth_version = auth_version + 1 WHERE username = ?"

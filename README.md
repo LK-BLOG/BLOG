@@ -18,6 +18,8 @@ blog/
 │   ├── guestbook.html    # 留言板
 │   ├── about.html        # 关于
 │   ├── friends.html      # 友链
+│   ├── login.html        # 登录 / 注册（含 GitHub 登录）
+│   ├── github-callback.html # GitHub 登录回调落地页
 │   ├── admin.html        # 管理后台
 │   ├── 404.html
 │   ├── css/style.css     # Win98 复古样式
@@ -36,6 +38,9 @@ blog/
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | POST | /api/login | 密码换 token | - |
+| POST | /api/register | 注册 | - |
+| GET | /api/auth/github/start | 跳转 GitHub 授权（回调 /api/auth/github/callback） | - |
+| GET | /api/auth/github/callback | GitHub 回调：建号/登录，邮箱用匿名 noreply | - |
 | GET | /api/articles | 文章列表 | - |
 | GET | /api/articles/{slug} | 文章详情 | - |
 | POST | /api/articles | 新建文章 | admin |
@@ -110,14 +115,44 @@ npx wrangler deploy
 npx wrangler secret put ADMIN_PASSWORD
 npx wrangler secret put AUTH_SECRET
 npx wrangler secret put EMAIL_CODE_SECRET
+npx wrangler secret put GITHUB_CLIENT_ID
+npx wrangler secret put GITHUB_CLIENT_SECRET
 ```
 
 ### 7. 验收
 - 首页能显示最新文章；文章列表/详情正常。
 - 留言板能发留言，1 分钟内重复发会被限频。
 - 页脚「管理入口」用你配置的 `ADMIN_PASSWORD` 登录，能写文章、删留言。
+- 登录页的 GitHub 按钮能走完授权并回到站内（账号邮箱是 `*.users.noreply.github.com`）。
 - 未绑定邮箱的普通账号进首页会弹绑定提示。
 - 忘记密码页可以发验证码，验证码由本地邮件桥用 `pyclaw@agent.qq.com` 发出。
+
+## GitHub 登录
+
+1. GitHub → Settings → Developer settings → OAuth Apps → New OAuth App：
+   - Homepage URL：站点地址
+   - Authorization callback URL：`https://<站点域名>/api/auth/github/callback`
+2. 线上配置 secret：
+
+```powershell
+npx wrangler secret put GITHUB_CLIENT_ID
+npx wrangler secret put GITHUB_CLIENT_SECRET
+# 可选，默认 PUBLIC_SITE_URL + /api/auth/github/callback
+npx wrangler secret put GITHUB_OAUTH_REDIRECT_URI
+# 可选，默认 https://xiaokan-esn.pages.dev
+npx wrangler secret put PUBLIC_SITE_URL
+```
+
+3. 应用迁移：`npx wrangler d1 migrations apply xiaokan-blog --remote`（本地用 `--local`）。
+4. 登录页点「用 GitHub 登录」→ GitHub 授权 → 回到 `github-callback.html` 存 token。
+
+细节：
+
+- 只申请 `read:user`，**不申请 `user:email`**，永远不读真实邮箱。
+- 邮箱固定写成 GitHub 匿名邮箱 `<GitHub数字ID>+<用户名>@users.noreply.github.com`，直接标记为已验证，不会再弹绑定邮箱。
+- 用这个 noreply 邮箱认人：重复登录复用同一账号；用户名取 GitHub login，非法字符换 `_`、超 20 位截断、重名自动加后缀。
+- 这类账号的密码字段是占位符，直接 GitHub 登录；想设密码时旧密码留空即可。
+- 本地调试回调填 `http://127.0.0.1:8787/api/auth/github/callback`，`.dev.vars` 里配 `GITHUB_OAUTH_REDIRECT_URI` 和 `PUBLIC_SITE_URL=http://127.0.0.1:8000`。GitHub OAuth App 只有一个回调地址，本地测试建议单建一个 App。
 
 ## 邮箱验证码 / 本地邮件桥
 

@@ -10,3 +10,7 @@ pylock.toml
 python_modules/
 frontend/assets/fonts/minecraft-ae.ttf
 frontend/assets/win98-icons/*.svg
+
+.workerd/
+.tmp-*
+
