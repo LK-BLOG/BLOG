@@ -1037,7 +1037,7 @@ async def github_oauth_callback(request: Request):
         "next": next_path,
     })
     return RedirectResponse(
-        site + "/github-callback.html#" + query,
+        site + "/github-callback#" + query,
         status_code=302,
         headers={"Cache-Control": "no-store"},
     )

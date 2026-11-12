@@ -46,7 +46,7 @@
 
     Blog.setToken(token);
     Blog.setUser(params.get("username") || "", params.get("role") || "", params.get("display_name") || "");
-    if (history.replaceState) history.replaceState(null, "", "github-callback.html");
+    if (history.replaceState) history.replaceState(null, "", "/github-callback");
     location.replace(next);
   })();
   </script>

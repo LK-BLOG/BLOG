@@ -134,8 +134,16 @@
     var ghError = new URLSearchParams(location.search).get("github_error");
     if (ghError) show(ghError);
 
+    var ghNext = next;
+    if (window.__XIAOKAN_EMBEDDED__) {
+      try {
+        var topLoc = window.top.location;
+        var topFile = topLoc.pathname.split("/").pop() || "index.html";
+        if (/^[A-Za-z0-9_.-]+\.html$/.test(topFile)) ghNext = topFile + (topLoc.search || "");
+      } catch (err) {}
+    }
     var ghUrl = (window.API_BASE || "").replace(/\/+$/, "") +
-      "/api/auth/github/start?next=" + encodeURIComponent(next);
+      "/api/auth/github/start?next=" + encodeURIComponent(ghNext);
     $("github-login").setAttribute("href", ghUrl);
     $("github-login").addEventListener("click", function (e) {
       e.preventDefault();
