@@ -1,8 +1,12 @@
   (function () {
     "use strict";
     var $ = function (id) { return document.getElementById(id); };
-    var next = Blog.loginReturnPath(new URLSearchParams(location.search).get("next"));
+    var params = new URLSearchParams(location.search);
     var pendingEmail = "";
+    function returnPath(theme) {
+      theme = theme || document.documentElement.getAttribute("data-theme");
+      return Blog.loginReturnPath(params.get("next") || (theme === "retro" ? "retro.html" : ""));
+    }
 
     function show(msg, type) {
       $("login-alert").innerHTML = '<div class="alert ' + (type || "error") + '">' + Blog.escapeHtml(msg) + "</div>";
@@ -10,19 +14,27 @@
     var ghError = new URLSearchParams(location.search).get("github_error");
     if (ghError) show(ghError);
 
-    var ghNext = next;
+    var embeddedNext = "";
     if (window.__XIAOKAN_EMBEDDED__) {
       try {
         var topLoc = window.top.location;
         var topFile = topLoc.pathname.split("/").pop() || "index.html";
-        if (/^[A-Za-z0-9_.-]+\.html$/.test(topFile)) ghNext = topFile + (topLoc.search || "");
+        if (/^[A-Za-z0-9_.-]+\.html$/.test(topFile)) embeddedNext = topFile + (topLoc.search || "");
       } catch (err) {}
     }
-    var ghUrl = (window.API_BASE || "").replace(/\/+$/, "") +
-      "/api/auth/github/start?next=" + encodeURIComponent(ghNext);
-    $("github-login").setAttribute("href", ghUrl);
+    function githubUrl(theme) {
+      return (window.API_BASE || "").replace(/\/+$/, "") +
+        "/api/auth/github/start?next=" + encodeURIComponent(embeddedNext || returnPath(theme));
+    }
+    $("github-login").setAttribute("href", githubUrl());
+    document.addEventListener("change", function (event) {
+      if (event.target.hasAttribute("data-theme-select")) {
+        $("github-login").setAttribute("href", githubUrl(event.target.value));
+      }
+    });
     $("github-login").addEventListener("click", function (e) {
       e.preventDefault();
+      var ghUrl = githubUrl();
       if (window.__XIAOKAN_EMBEDDED__) {
         try { window.top.location.href = ghUrl; return; } catch (err) {}
       }
@@ -41,7 +53,7 @@
     }
     function finish(data) {
       saveAuth(data);
-      location.href = next;
+      location.href = returnPath();
     }
     function sendRegisterCode(email) {
       $("verify-alert").innerHTML = "";
@@ -136,7 +148,7 @@
       var btn = this.querySelector("button[type='submit']");
       btn.disabled = true;
       Blog.api("/api/me/email/verify", { method: "POST", body: { email: pendingEmail, code: code } })
-        .then(function () { location.href = next; })
+        .then(function () { location.href = returnPath(); })
         .catch(function (err) { $("verify-alert").innerHTML = '<div class="alert error">' + Blog.escapeHtml(err.message || "验证失败") + "</div>"; })
         .finally(function () { btn.disabled = false; });
     });

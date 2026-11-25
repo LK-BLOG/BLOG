@@ -1,6 +1,8 @@
 html, body { height: 100%; }
 body { margin: 0; background-color: #080828; font: 14px Verdana, "SimSun", sans-serif; }
 a:hover { color: #ffff66; }
+.skip-link { position: absolute; top: 6px; left: 6px; padding: 8px; background: #080828; transform: translateY(-200%); }
+.skip-link:focus { transform: none; }
 .page { width: 100%; height: 100%; border-color: #7778ae; }
 .page-main { height: 100%; }
 .masthead {
@@ -116,6 +118,10 @@ a:hover { color: #ffff66; }
 .retro-date { color: #c6c6d9; }
 .retro-comment { padding: 8px 0; border-top: 1px dotted #62679f; }
 .retro-reply { margin-left: 18px; }
+.retro-filters { padding: 5px; background: #161748; border: 1px inset #7575b2; }
+.content a[aria-current="true"] { color: #ffff73; font-weight: bold; }
+.contents-level-3 { margin-left: 14px; }
+.contents-level-4 { margin-left: 28px; }
 .footer { color: #bcc4ee; border-top: 1px solid #686cb1; }
 @media (max-width: 640px) {
   .sidebar { width: 70px; }
@@ -124,7 +130,4 @@ a:hover { color: #ffff66; }
   .nav-list a { padding: 5px 3px; }
   .portal, .portal tbody, .portal tr, .portal td { display: block; width: auto; }
   .content { padding: 7px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  marquee { display: none; }
 }

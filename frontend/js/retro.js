@@ -15,6 +15,12 @@
   }
   var page = params.page || "home";
   var keyword = (params.q || "").substring(0, 120);
+  var token = "";
+  var username = "";
+  try {
+    token = localStorage.getItem("xiaokan_token") || "";
+    username = localStorage.getItem("xiaokan_username") || "";
+  } catch (error) { /* storage can be disabled */ }
 
   function append(parent, tag, value) {
     var element = document.createElement(tag);
@@ -57,6 +63,8 @@
   document.getElementById("retro-normal").href = modernUrl("normal");
   var activeNav = document.getElementById("retro-nav-" + (page === "article" ? "articles" : page));
   if (activeNav) activeNav.className = "current";
+  var account = document.getElementById("retro-account");
+  account.href = "login.html" + query({ theme: "retro", next: location.pathname + location.search + location.hash });
 
   function request(url, done, payload, failed, token) {
     var xhr = new XMLHttpRequest();
@@ -102,11 +110,14 @@
     route.type = "hidden";
     route.name = "page";
     route.value = target;
-    if (target === "articles" && params.tag) {
-      var tag = append(form, "input");
-      tag.type = "hidden";
-      tag.name = "tag";
-      tag.value = params.tag;
+    if (page === "articles") {
+      ["tag", "sort", "view"].forEach(function (name) {
+        if (!params[name]) return;
+        var state = append(form, "input");
+        state.type = "hidden";
+        state.name = name;
+        state.value = params[name];
+      });
     }
     var caption = append(form, "label", label);
     caption.htmlFor = "retro-search";
@@ -126,6 +137,49 @@
     var submit = append(buttonCell, "input");
     submit.type = "submit";
     submit.value = "搜索";
+  }
+
+  function articleListUrl(tag, sort, view) {
+    return "retro.html" + query({ page: "articles", q: keyword, tag: tag, sort: sort, view: view });
+  }
+
+  function articleFilters(parent, articles, results) {
+    var bar = append(parent, "p");
+    bar.className = "retro-filters";
+    var view = params.view === "archive" ? "" : "archive";
+    link(bar, view ? "按月归档" : "返回列表", articleListUrl(params.tag, params.sort, view));
+    append(bar, "span", " · ");
+    var sortLabel = append(bar, "label", "排序 ");
+    var order = append(sortLabel, "select");
+    var modes = [["latest", "最新发布"], ["oldest", "最早发布"], ["popular", "最多浏览"]];
+    modes.forEach(function (mode) { append(order, "option", mode[1]).value = mode[0]; });
+    order.value = /^(oldest|popular)$/.test(params.sort) ? params.sort : "latest";
+    order.disabled = !view;
+    order.onchange = function () { location.href = articleListUrl(params.tag, order.value, params.view); };
+    var random = append(bar, "button", "随便读一篇");
+    random.type = "button";
+    random.disabled = !results.length;
+    random.onclick = function () {
+      location.href = "retro.html" + query({ page: "article", slug: results[Math.floor(Math.random() * results.length)].slug });
+    };
+    var tags = [];
+    articles.forEach(function (article) {
+      tagsOf(article).forEach(function (tag) { if (tags.indexOf(tag) < 0) tags.push(tag); });
+    });
+    if (params.tag && tags.indexOf(params.tag) < 0) tags.push(params.tag);
+    var filters = append(parent, "p", "标签 ");
+    link(filters, "全部", articleListUrl("", params.sort, params.view));
+    tags.forEach(function (tag) {
+      append(filters, "span", " · ");
+      var item = link(filters, tag, articleListUrl(tag, params.sort, params.view));
+      if (tag === params.tag) item.setAttribute("aria-current", "true");
+    });
+    append(parent, "p", "找到 " + results.length + " 篇");
+  }
+
+  function tagsOf(article) {
+    return (article.tags || "").split(",").map(function (tag) { return tag.replace(/^\s+|\s+$/g, ""); })
+      .filter(function (tag) { return tag; });
   }
 
   function articleList() {
@@ -156,22 +210,36 @@
       searchForm("articles", "全文搜索");
     }
     request("/api/articles" + query({ q: keyword }), function (data) {
-      var list = append(target, "ul");
-      list.className = "retro-entries";
       var articles = data.articles || [];
-      var shown = 0;
-      var n;
-      for (n = 0; n < articles.length; n++) {
-        var a = articles[n];
-        if (params.tag && ("," + (a.tags || "").replace(/\s*,\s*/g, ",") + ",").indexOf("," + params.tag + ",") < 0) continue;
+      var results = articles.filter(function (a) { return !params.tag || tagsOf(a).indexOf(params.tag) >= 0; });
+      var archive = page === "articles" && params.view === "archive";
+      if (page === "articles") {
+        results.sort(function (a, b) {
+          var newest = (b.created_at || "").localeCompare(a.created_at || "");
+          if (archive) return newest;
+          var pinned = (Number(b.pinned) || 0) - (Number(a.pinned) || 0);
+          if (pinned) return pinned;
+          if (params.sort === "oldest") return -newest;
+          return params.sort === "popular" ? (Number(b.views) || 0) - (Number(a.views) || 0) || newest : newest;
+        });
+        articleFilters(target, articles, results);
+      } else results = results.slice(0, 5);
+      var list;
+      var previousMonth;
+      results.forEach(function (a) {
+        var month = (a.created_at || "").substring(0, 7) || "日期未知";
+        if (!list || (archive && month !== previousMonth)) {
+          if (archive) append(target, "h3", month);
+          list = append(target, "ul");
+          list.className = "retro-entries";
+          previousMonth = month;
+        }
         var row = append(list, "li");
         link(row, a.title, "retro.html" + query({ page: "article", slug: a.slug }));
-        append(row, "small", " — " + (a.created_at || "").substring(0, 10)).className = "retro-date";
-        shown++;
-        if (page === "home" && shown === 5) break;
-      }
-      if (!shown) append(target, "p", "没有匹配的文章。");
-      if (page === "home" && shown) link(append(target, "p"), "全部文章", "retro.html?page=articles");
+        append(row, "small", " — " + (a.created_at || "").substring(0, 10) + " · " + (Number(a.views) || 0) + " 次浏览").className = "retro-date";
+      });
+      if (!results.length) append(target, "p", "没有匹配的文章。");
+      if (page === "home" && results.length) link(append(target, "p"), "全部文章", "retro.html?page=articles");
     });
   }
 
@@ -250,6 +318,10 @@
   }
 
   function renderArticle(markdown) {
+    var directory = document.createElement("div");
+    var entries = panel(directory, "文章目录");
+    var contents = append(entries, "ul");
+    var start = append(content, "div");
     var lines = (markdown || "").split(/\r?\n/);
     var code = null;
     var list = null;
@@ -279,7 +351,12 @@
         if (section) {
           var headingLevel = section[1].length;
           var entry = append(content, "h" + Math.max(3, headingLevel));
-          if (headingLevel >= 2 && headingLevel <= 4) entry.id = "section-" + (++sectionNumber);
+          if (headingLevel >= 2 && headingLevel <= 4) {
+            entry.id = "section-" + (++sectionNumber);
+            var item = append(contents, "li");
+            item.className = "contents-level-" + headingLevel;
+            link(item, section[2], "#" + entry.id);
+          }
           inline(entry, section[2]);
         }
         else if (button && safeLink(button[1])) {
@@ -288,6 +365,8 @@
       }
     }
     if (code) append(content, "pre", code.join("\n"));
+    if (sectionNumber > 1) content.insertBefore(directory, start);
+    content.removeChild(start);
   }
 
   function article() {
@@ -297,6 +376,10 @@
       append(content, "small", (data.created_at || "").substring(0, 10)).className = "retro-date";
       append(content, "span", " · ");
       link(content, "评论", "#retro-comments");
+      tagsOf(data).forEach(function (tag) {
+        append(content, "span", " · ");
+        link(content, "#" + tag, "retro.html" + query({ page: "articles", tag: tag }));
+      });
       renderArticle(data.content_md);
       append(content, "hr");
       articleComments();
@@ -311,8 +394,6 @@
     section.id = "retro-comments";
     var url = "/api/articles/" + encodeURIComponent(params.slug) + "/comments";
     var base = "retro.html" + query({ page: "article", slug: params.slug });
-    var token = "";
-    try { token = localStorage.getItem("xiaokan_token") || ""; } catch (error) { /* storage can be disabled */ }
     if (token) {
       var form = append(section, "form");
       var label = append(form, "label", "评论：");
@@ -343,7 +424,7 @@
         return false;
       };
     } else {
-      link(append(section, "p"), "登录后回来评论", "login.html" + query({ next: base + "#retro-comments" }));
+      link(append(section, "p"), "登录后回来评论", "login.html" + query({ theme: "retro", next: base + "#retro-comments" }));
     }
     request(url + query({ page: parseInt(params.cp, 10) || 1 }), function (data) {
       var comments = data.comments || [];
@@ -378,6 +459,7 @@
     nickname.id = "retro-nickname";
     nickname.type = "text";
     nickname.maxLength = 30;
+    if (token) nicknameRow.style.display = "none";
     var messageRow = append(form, "p");
     var messageLabel = append(messageRow, "label", "留言：");
     messageLabel.htmlFor = "retro-message";
@@ -387,6 +469,19 @@
     message.cols = 42;
     message.rows = 3;
     message.maxLength = 500;
+    var length = append(messageRow, "small");
+    var draftKey = "xiaokan_guestbook_draft:" + (token ? username : "guest");
+    try { message.value = (localStorage.getItem(draftKey) || "").substring(0, 500); }
+    catch (error) { /* storage can be disabled */ }
+    function saveDraft() {
+      length.textContent = " " + message.value.length + " / 500";
+      try {
+        if (message.value) localStorage.setItem(draftKey, message.value);
+        else localStorage.removeItem(draftKey);
+      } catch (error) { /* storage can be disabled */ }
+    }
+    saveDraft();
+    message.oninput = saveDraft;
     var submit = append(form, "input");
     submit.type = "submit";
     submit.value = "提交留言";
@@ -395,18 +490,24 @@
     form.onsubmit = function () {
       var name = nickname.value.replace(/^\s+|\s+$/g, "");
       var value = message.value.replace(/^\s+|\s+$/g, "");
-      if (!name || !value || value.length > 500) {
+      if ((!token && !name) || !value || value.length > 500) {
         status.textContent = " 请填昵称和留言，留言最多 500 字。";
         return false;
       }
       submit.disabled = true;
       status.textContent = " 正在提交…";
+      var payload = { content: value };
+      if (!token) payload.nickname = name;
       request("/api/messages", function () {
+        if (message.value.replace(/^\s+|\s+$/g, "") === value) {
+          message.value = "";
+          saveDraft();
+        }
         location.href = "retro.html?page=guestbook";
-      }, { nickname: name, content: value }, function (error) {
+      }, payload, function (error) {
         status.textContent = " " + error;
         submit.disabled = false;
-      });
+      }, token);
       return false;
     };
     var number = parseInt(params.p, 10) || 1;

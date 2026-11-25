@@ -6,21 +6,38 @@
 
   var API = (window.API_BASE || "").replace(/\/+$/, "");
   var EMBEDDED = window.self !== window.top || new URLSearchParams(location.search).get("embed") === "1";
+  var page = location.pathname.split("/").pop().replace(/\.html$/i, "");
+  var accountPage = page === "login" || page === "admin";
   window.__XIAOKAN_EMBEDDED__ = EMBEDDED;
 
   try {
     var forcedTheme = new URLSearchParams(location.search).get("theme");
     document.documentElement.setAttribute(
       "data-theme",
-      forcedTheme === "os" || forcedTheme === "normal" ? forcedTheme : (localStorage.getItem("xiaokan_theme") || "normal")
+      forcedTheme === "os" || forcedTheme === "normal" || (forcedTheme === "retro" && accountPage)
+        ? forcedTheme : (localStorage.getItem("xiaokan_theme") || "normal")
     );
   } catch (e) {
     document.documentElement.setAttribute("data-theme", "normal");
   }
 
   function applyTheme(theme) {
+    if (accountPage && (theme === "retro" || new URLSearchParams(location.search).has("theme"))) {
+      var accountUrl = new URL(location.href);
+      accountUrl.searchParams.set("theme", theme);
+      if (accountUrl.href !== location.href) history.replaceState(history.state, "", accountUrl);
+      document.querySelectorAll("[data-retro-home]").forEach(function (link) {
+        link.href = theme === "retro" ? "retro.html" : "index.html";
+      });
+      if (theme === "retro") {
+        document.documentElement.setAttribute("data-theme", "retro");
+        document.body.classList.remove("os-mode");
+        if (window.XiaokanOS) window.XiaokanOS.setTheme("retro");
+        document.querySelectorAll("[data-theme-select]").forEach(function (sel) { sel.value = theme; });
+        return;
+      }
+    }
     if (theme === "retro") {
-      var page = location.pathname.split("/").pop().replace(/\.html$/i, "");
       var params = new URLSearchParams(location.search);
       params.delete("theme");
       params.delete("embed");
@@ -48,7 +65,7 @@
     var theme = "normal";
     try { theme = localStorage.getItem("xiaokan_theme") || "normal"; } catch (e) {}
     var forcedTheme = new URLSearchParams(location.search).get("theme");
-    if (forcedTheme === "os" || forcedTheme === "normal") theme = forcedTheme;
+    if (forcedTheme === "os" || forcedTheme === "normal" || (forcedTheme === "retro" && accountPage)) theme = forcedTheme;
     applyTheme(theme);
     var nav = document.querySelector(".nav");
     if (nav && !nav.querySelector(".theme-picker")) {

@@ -8,6 +8,7 @@
   <link rel="icon" href="assets/favicon.svg">
 </head>
 <body background="assets/retro-tile.gif" bgcolor="#080828" text="#ffffdd" link="#00ffff" vlink="#ff88ff">
+  <a class="skip-link" href="#retro-title">跳到正文</a>
   <table class="page" width="100%" align="center" cellpadding="8" cellspacing="3" border="4" bgcolor="#101048" summary="小戡的个人主页">
     <tr>
       <td colspan="2" class="masthead" bgcolor="#000080">
@@ -27,21 +28,23 @@
         </table>
       </td>
     </tr>
-    <tr><td colspan="2" class="ticker"><marquee scrollamount="4">★ 欢迎光临小戡的个人主页 ★</marquee></td></tr>
+    <tr><td colspan="2" class="ticker">欢迎光临小戡的个人主页</td></tr>
     <tr class="page-main">
       <td class="sidebar" width="136" valign="top">
         <div class="nav-heading">站内导航</div>
-        <ul class="nav-list">
+        <ul class="nav-list" role="navigation" aria-label="站内导航">
           <li><a id="retro-nav-home" href="retro.html">首页</a></li>
           <li><a id="retro-nav-articles" href="retro.html?page=articles">文章</a></li>
           <li><a id="retro-nav-guestbook" href="retro.html?page=guestbook">留言板</a></li>
           <li><a id="retro-nav-friends" href="retro.html?page=friends">友情链接</a></li>
           <li><a id="retro-nav-about" href="retro.html?page=about">关于我</a></li>
+          <li><a id="retro-account" href="login.html?theme=retro">登录 / 注册</a></li>
+          <li><a href="admin.html?theme=retro">管理后台</a></li>
         </ul>
         <a class="rss-badge" href="/api/feed.xml">RSS 2.0</a>
       </td>
-      <td valign="top" class="content" bgcolor="#080828">
-        <h2 id="retro-title">正在接入…</h2>
+      <td valign="top" class="content" bgcolor="#080828" role="main">
+        <h2 id="retro-title" tabindex="-1">正在接入…</h2>
         <div id="retro-content"></div>
         <noscript><p>请开启 JavaScript，或者<a href="index.html?theme=normal">回到 Normal</a>。</p></noscript>
       </td>
