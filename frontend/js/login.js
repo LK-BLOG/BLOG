@@ -44,6 +44,7 @@
       $("login-form").classList.toggle("hidden", register);
       $("register-form").classList.toggle("hidden", !register);
       $("verify-form").classList.add("hidden");
+      $("forgot-form").classList.add("hidden");
       $("goto-register").parentElement.classList.toggle("hidden", register);
       $("register-switch").classList.toggle("hidden", !register);
     }
@@ -74,6 +75,7 @@
       $("register-switch").classList.add("hidden");
     });
     $("goto-login").addEventListener("click", function () { setMode(false); });
+    $("forgot-goto-login").addEventListener("click", function () { setMode(false); $("username").focus(); });
 
     $("fp-send").addEventListener("click", function () {
       var identifier = $("fp-id").value.trim();

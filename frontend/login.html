@@ -7,15 +7,17 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <meta name="description" content="小戡的博客 - 登录 / 注册 / 邮箱验证">
   <script src="js/account-theme.js"></script>
-  <link rel="stylesheet" href="css/style.css?v=retro-account">
+  <style>html[data-theme="retro"], html[data-theme="retro"] body { background-color:#080828; color:#ffffdd; }</style>
+  <link rel="stylesheet" href="css/style.css?v=retro-contrast">
   <style>
     .login-switch { text-align:center; margin-top:12px; font-size:13px; }
-    .login-switch a { color:#0000ff; cursor:pointer; }
+    .login-action { padding:0; border:0; color:var(--link); background:transparent; font:inherit; text-decoration:underline; cursor:pointer; }
     .gh-btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; box-sizing:border-box; text-decoration:none; font-weight:bold; }
     .gh-mark { flex:0 0 auto; }
-    .login-divider { display:flex; align-items:center; gap:8px; color:#666; font-size:12px; margin:2px 0 12px; }
+    .login-divider { display:flex; align-items:center; gap:8px; color:var(--dim); font-size:12px; margin:2px 0 12px; }
     .login-divider::before, .login-divider::after { content:""; flex:1; border-top:1px solid #808080; }
     .gh-note { text-align:center; margin:0 0 12px; }
+    #forgot-form { margin-top:12px; padding:10px; border:2px inset var(--shadow); background:var(--window-bg); }
   </style>
 </head>
 <body>
@@ -51,9 +53,9 @@
             <button type="submit" class="btn primary" style="width:100%">登录</button>
           </form>
 
-          <div class="login-switch">没有账号？<a id="goto-register">注册一个</a> | <a id="forgot-pw">忘记密码？</a></div>
+          <div class="login-switch">没有账号？<button id="goto-register" class="login-action" type="button">注册一个</button> | <button id="forgot-pw" class="login-action" type="button">忘记密码？</button></div>
 
-          <form id="forgot-form" class="hidden" style="margin-top:12px;padding:10px;border:2px inset;border-color:#808080 #fff #fff #808080;background:#fff">
+          <form id="forgot-form" class="hidden">
             <p class="muted mb8">邮箱验证重置密码。只有已绑定邮箱的账号会收到验证码。</p>
             <div class="form-row">
               <label for="fp-id">用户名或绑定邮箱</label>
@@ -73,6 +75,7 @@
               <input class="field" id="fp-password2" type="password" maxlength="72" autocomplete="new-password" required>
             </div>
             <button type="submit" class="btn primary" style="width:100%">重置密码</button>
+            <div class="login-switch"><button id="forgot-goto-login" class="login-action" type="button">返回登录</button></div>
           </form>
 
           <form id="register-form" class="hidden">
@@ -108,10 +111,10 @@
             </div>
             <button type="submit" class="btn primary" style="width:100%">验证并完成注册</button>
             <div class="mt8"><button type="button" class="btn" id="v-resend">重新发送验证码</button></div>
-            <div class="login-switch"><a id="verify-goto-login">返回登录</a></div>
+            <div class="login-switch"><button id="verify-goto-login" class="login-action" type="button">返回登录</button></div>
           </form>
 
-          <div class="login-switch hidden" id="register-switch"><a id="goto-login">已有账号？去登录</a></div>
+          <div class="login-switch hidden" id="register-switch"><button id="goto-login" class="login-action" type="button">已有账号？去登录</button></div>
         </div>
       </div>
       <p class="muted px12" style="text-align:center">登录后才能使用 AI 机器人；每个账号每天有一定轮数，管理员不限。</p>

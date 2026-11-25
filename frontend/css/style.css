@@ -1070,13 +1070,22 @@ html[data-theme="retro"] .btn,
 html[data-theme="retro"] #e-quill { color: #101048; background: #ffffe5; border-radius: 0; }
 html[data-theme="retro"] .btn,
 html[data-theme="retro"] select.field { background: #c1c8f1; }
+html[data-theme="retro"] .btn:hover,
+html[data-theme="retro"] select.field:hover { background: #dce1ff; }
 html[data-theme="retro"] .btn.primary { color: #ffffa2; background: #303880; }
+html[data-theme="retro"] .btn.primary:hover { background: #3d478f; }
 html[data-theme="retro"] .btn.danger { color: #fff; background: #813341; }
-html[data-theme="retro"] .login-switch a { color: var(--link); }
+html[data-theme="retro"] .btn.danger:hover { background: #984252; }
+html[data-theme="retro"] .field::placeholder { color: #4b4b67; opacity: 1; }
+html[data-theme="retro"] .alert { color: #19163a; }
 html[data-theme="retro"] .ql-editor { color: #101048; }
 html[data-theme="retro"] marquee { display: none; }
 html[data-theme="retro"] .nav .login-home-link { position: static; display: inline-flex; }
-html[data-theme="retro"] :focus-visible { outline: 2px solid #ffed67; outline-offset: 2px; }
+html[data-theme="retro"] :focus-visible {
+  outline: 2px solid #ffed67;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #080828;
+}
 @media (prefers-reduced-motion: reduce) {
   html[data-theme="retro"] *, html[data-theme="retro"] *::before, html[data-theme="retro"] *::after {
     animation-duration: 0.01ms !important;
