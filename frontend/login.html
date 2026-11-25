@@ -10,6 +10,7 @@
   <style>
     html[data-theme="retro"], html[data-theme="retro"] body { background-color:#080828; color:#ffffdd; }
     html[data-theme="retro"] a { color:#66faff; }
+    html[data-theme="retro"] [data-normal-home], html:not([data-theme="retro"]) [data-retro-home] { display:none; }
   </style>
   <link rel="stylesheet" href="css/style.css?v=retro-contrast">
   <style>
@@ -25,8 +26,14 @@
 </head>
 <body>
   <nav class="nav">
-    <div class="nav-brand"><a href="index.html" data-retro-home><span class="brand-icon">戡</span>小戡的博客 | 账号</a></div>
-    <div class="nav-links login-home-link"><a href="index.html" data-retro-home>返回首页</a></div>
+    <div class="nav-brand">
+      <a href="index.html" data-normal-home><span class="brand-icon">戡</span>小戡的博客 | 账号</a>
+      <a href="retro.html" data-retro-home><span class="brand-icon">戡</span>小戡的博客 | 账号</a>
+    </div>
+    <div class="nav-links login-home-link">
+      <a href="index.html" data-normal-home>返回首页</a>
+      <a href="retro.html" data-retro-home>返回首页</a>
+    </div>
   </nav>
 
   <main>

@@ -26,9 +26,6 @@
       var accountUrl = new URL(location.href);
       accountUrl.searchParams.set("theme", theme);
       if (accountUrl.href !== location.href) history.replaceState(history.state, "", accountUrl);
-      document.querySelectorAll("[data-retro-home]").forEach(function (link) {
-        link.href = theme === "retro" ? "retro.html" : "index.html";
-      });
       if (theme === "retro") {
         document.documentElement.setAttribute("data-theme", "retro");
         document.body.classList.remove("os-mode");
