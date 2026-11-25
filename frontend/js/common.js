@@ -19,6 +19,18 @@
   }
 
   function applyTheme(theme) {
+    if (theme === "retro") {
+      var page = location.pathname.split("/").pop().replace(/\.html$/i, "");
+      var params = new URLSearchParams(location.search);
+      params.delete("theme");
+      params.delete("embed");
+      if (["article", "articles", "guestbook", "about", "friends"].includes(page)) params.set("page", page);
+      else if (page) params.set("back", page);
+      var search = params.toString();
+      var anchor = location.hash === "#comments" ? "#retro-comments" : location.hash;
+      location.assign("retro.html" + (search ? "?" + search : "") + anchor);
+      return;
+    }
     theme = theme === "os" ? "os" : "normal";
     document.documentElement.setAttribute("data-theme", theme);
     if (!EMBEDDED) document.body.classList.toggle("os-mode", theme === "os");
@@ -43,8 +55,9 @@
       var picker = document.createElement("label");
       picker.className = "theme-picker";
       picker.innerHTML = '<span>主题</span><select class="field" data-theme-select>' +
-        '<option value="normal">Normal</option><option value="os">OS</option></select>';
+        '<option value="normal">Normal</option><option value="os">OS</option><option value="retro">千禧年</option></select>';
       nav.appendChild(picker);
+      picker.querySelector("select").value = theme;
     }
     document.addEventListener("change", function (e) {
       if (e.target && e.target.matches && e.target.matches("[data-theme-select]")) applyTheme(e.target.value);
@@ -136,6 +149,17 @@
   function safeUrl(value) {
     var url = String(value == null ? "" : value).trim();
     return /^https?:\/\//i.test(url) ? url : "";
+  }
+
+  function loginReturnPath(value) {
+    try {
+      var url = new URL(value || "index.html", location.href);
+      if (url.origin === location.origin && /^https?:$/.test(url.protocol) &&
+          !url.pathname.startsWith("//")) {
+        return url.pathname + url.search + url.hash;
+      }
+    } catch (err) { /* use the home page for malformed URLs */ }
+    return "index.html";
   }
 
   function icon(name, className) {
@@ -258,6 +282,7 @@
     logout: logout,
     escapeHtml: escapeHtml,
     safeUrl: safeUrl,
+    loginReturnPath: loginReturnPath,
     icon: icon,
     fmtDate: fmtDate,
     applyTheme: applyTheme

@@ -26,10 +26,17 @@
       <fieldset>
         <legend>全部文章 <a class="admin-link" href="/api/feed.xml" target="_blank" rel="noopener">RSS</a></legend>
         <div class="mb8" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <input class="field" type="text" id="search-input" placeholder="搜索文章…" style="max-width:280px">
-          <button class="btn" id="view-toggle" data-arch="0"><img class="win98-svg-icon" src="assets/win98-icons/folder.png" alt=""> 归档</button>
+          <input class="field" type="search" id="search-input" maxlength="120" aria-label="全文搜索" placeholder="搜索标题、标签、正文…" style="max-width:280px">
+          <select class="field" id="article-sort" aria-label="文章排序">
+            <option value="latest">最新发布</option>
+            <option value="oldest">最早发布</option>
+            <option value="popular">最多浏览</option>
+          </select>
+          <button class="btn" id="view-toggle" type="button" aria-pressed="false"><img class="win98-svg-icon" src="assets/win98-icons/folder.png" alt=""> 归档</button>
+          <button class="btn" id="random-article" type="button" disabled>随便读一篇</button>
           <div id="tag-filter" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
         </div>
+        <p id="article-count" class="muted" role="status"></p>
         <div id="article-list" class="win flat"><p class="muted px12">加载中…</p></div>
       </fieldset>
     </section>

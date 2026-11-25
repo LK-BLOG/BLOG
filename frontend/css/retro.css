@@ -1,0 +1,119 @@
+html, body { height: 100%; }
+body { margin: 0; background-color: #080828; font: 14px Verdana, "SimSun", sans-serif; }
+a:hover { color: #ffff66; }
+.page { width: 100%; height: 100%; border-color: #7778ae; }
+.page-main { height: 100%; }
+.masthead {
+  border: 1px outset #898fe9;
+  padding: 14px;
+  background: #13146b url("../assets/retro-tile.gif") repeat;
+}
+.site-icon { padding: 3px; border: 2px outset #8089ca; background: #222672; }
+.masthead h1 { margin: 0 0 4px; font: bold 29px "SimSun", serif; }
+.masthead h1 a { color: #ffff5c; text-decoration: none; }
+.site-address { color: #b9bcfb; font: 13px "Courier New", monospace; }
+.masthead select { margin-top: 4px; }
+.page input, .page textarea, .page select, .page button { font: 13px Verdana, "SimSun", sans-serif; }
+.page input[type="text"], .page textarea {
+  padding: 4px 6px;
+  color: #080828;
+  background: #ffffe5;
+  border: 2px inset #929be0;
+  border-radius: 0;
+}
+.page input[type="submit"], .page button, .page select {
+  padding: 4px 8px;
+  color: #101048;
+  background: #c1c8f1;
+  border: 2px outset #9ba5e9;
+  border-radius: 0;
+}
+.page input[type="submit"], .page button {
+  appearance: none;
+  margin: 3px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.page input[type="submit"]:hover, .page button:hover, .page select:hover { background: #e3e8ff; }
+.page input[type="submit"]:active, .page button:active { border-style: inset; }
+.page input[type="submit"]:disabled, .page button:disabled { color: #555d83; cursor: default; }
+.page a:focus, .page input:focus, .page textarea:focus, .page select:focus {
+  outline: 2px dotted #ffed67;
+  outline-offset: 2px;
+}
+.ticker { padding: 4px 8px; color: #ffff77; background: #24286e; border: 1px inset #7c82bf; }
+.sidebar { padding: 6px; background: #15154f; }
+.nav-heading {
+  padding: 6px;
+  color: #ffff8a;
+  background: #2a307c;
+  border: 1px outset #7984d3;
+  font-weight: bold;
+}
+.nav-list { margin: 5px 0 18px; padding: 0; list-style: none; }
+.nav-list a {
+  display: block;
+  margin: 3px 0;
+  padding: 7px 5px;
+  border: 1px solid #474c94;
+  background: #1b205e;
+  text-decoration: none;
+}
+.nav-list a:hover, .nav-list a.current { border-color: #fff273; color: #ffff73; background: #303880; }
+.rss-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #a64400;
+  color: #fff !important;
+  border: 1px outset #ffbb66;
+  font: bold 11px Verdana, sans-serif;
+  text-decoration: none;
+}
+.content { padding: 12px; overflow-wrap: anywhere; line-height: 1.55; }
+.content h2 { margin: 0 0 12px; color: #ffff8d; border-bottom: 1px solid #555ca2; }
+.content h3, .content h4 { color: #e3e6ff; }
+.content img { max-width: 100%; height: auto; }
+.content pre {
+  white-space: pre-wrap;
+  background: #191945;
+  border: 1px inset #7575b2;
+  padding: 8px;
+}
+.content form { margin-bottom: 12px; padding: 8px; border: 1px inset #7575b2; background: #161748; }
+.content input { max-width: 95%; }
+.content textarea { max-width: 95%; }
+.portal { width: 100%; border-spacing: 6px; table-layout: fixed; }
+.portal td { vertical-align: top; }
+.portal-main { width: 63%; }
+.portal-panel {
+  margin-bottom: 8px;
+  border: 1px solid #666bb0;
+  background: #11123d;
+}
+.portal-panel h3 {
+  margin: 0;
+  padding: 5px 8px;
+  background: #2a307c;
+  border-bottom: 1px solid #8890cd;
+  color: #ffffa2;
+  font-size: 14px;
+}
+.panel-body { padding: 8px; }
+.panel-body p { margin: 0 0 8px; }
+.panel-body ul, .retro-entries { margin: 0; padding-left: 20px; }
+.retro-entries li { padding: 5px 0; border-bottom: 1px dotted #62679f; }
+.retro-date { color: #c6c6d9; }
+.retro-comment { padding: 8px 0; border-top: 1px dotted #62679f; }
+.retro-reply { margin-left: 18px; }
+.footer { color: #bcc4ee; border-top: 1px solid #686cb1; }
+@media (max-width: 640px) {
+  .sidebar { width: 70px; }
+  .masthead h1 { font-size: 22px; }
+  .site-icon { width: 28px; height: 28px; }
+  .nav-list a { padding: 5px 3px; }
+  .portal, .portal tbody, .portal tr, .portal td { display: block; width: auto; }
+  .content { padding: 7px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  marquee { display: none; }
+}

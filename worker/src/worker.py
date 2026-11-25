@@ -803,7 +803,9 @@ def _client_ip(request: Request) -> str:
 async def _login_remaining(db, ip: str, username: str) -> int:
     now = int(time.time())
     for key in ("ip:" + ip, "user:" + username):
-        row = await db.prepare("SELECT locked_until FROM login_rate_limits WHERE key = ?").bind(key).first()
+        row = await db.prepare(
+            "SELECT locked_until FROM login_rate_limits WHERE key = ? AND fails >= ?"
+        ).bind(key, LOGIN_MAX_FAILS).first()
         if row and int(row["locked_until"]) > now:
             return int(row["locked_until"]) - now
     return 0
@@ -812,13 +814,13 @@ async def _login_remaining(db, ip: str, username: str) -> int:
 async def _record_login_fail(db, ip: str, username: str) -> None:
     now = int(time.time())
     for key in ("ip:" + ip, "user:" + username):
-        row = await db.prepare("SELECT fails FROM login_rate_limits WHERE key = ?").bind(key).first()
-        fails = (int(row["fails"]) + 1) if row else 1
-        locked_until = now + LOGIN_LOCK_SECONDS if fails >= LOGIN_MAX_FAILS else 0
         await db.prepare(
-            "INSERT INTO login_rate_limits (key, fails, locked_until) VALUES (?, ?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET fails = excluded.fails, locked_until = excluded.locked_until"
-        ).bind(key, fails, locked_until).run()
+            "INSERT INTO login_rate_limits (key, fails, locked_until) VALUES (?, 1, ?) "
+            "ON CONFLICT(key) DO UPDATE SET "
+            "fails = CASE WHEN login_rate_limits.locked_until <= ? THEN 1 ELSE login_rate_limits.fails + 1 END, "
+            "locked_until = excluded.locked_until "
+            "WHERE login_rate_limits.locked_until <= ? OR login_rate_limits.fails < ?"
+        ).bind(key, now + LOGIN_LOCK_SECONDS, now, now, LOGIN_MAX_FAILS).run()
 
 
 async def _clear_login_fails(db, ip: str, username: str) -> None:
@@ -1212,10 +1214,18 @@ async def list_articles(request: Request):
     parsed = await _auth_optional(request)
     is_admin = bool(parsed and parsed[1] == "admin")
     show_all = request.query_params.get("all") == "1" and is_admin
+    keyword = request.query_params.get("q", "").strip()[:120]
     if show_all:
         res = await db.prepare(
             "SELECT slug, title, tags, status, pinned, views, created_at, updated_at FROM articles ORDER BY pinned DESC, created_at DESC"
         ).all()
+    elif keyword:
+        res = await db.prepare(
+            "SELECT slug, title, tags, status, pinned, views, created_at, updated_at FROM articles "
+            "WHERE status = 'published' AND (instr(lower(title), lower(?)) > 0 "
+            "OR instr(lower(tags), lower(?)) > 0 OR instr(lower(content_md), lower(?)) > 0 "
+            "OR instr(lower(slug), lower(?)) > 0) ORDER BY pinned DESC, created_at DESC"
+        ).bind(keyword, keyword, keyword, keyword).all()
     else:
         res = await db.prepare(
             "SELECT slug, title, tags, status, pinned, views, created_at, updated_at FROM articles WHERE status = 'published' ORDER BY pinned DESC, created_at DESC"
@@ -1308,14 +1318,18 @@ async def list_messages(request: Request):
         per = min(100, max(1, int(request.query_params.get("per", 20))))
     except (TypeError, ValueError):
         per = 20
-    total_row = await db.prepare("SELECT COUNT(*) AS n FROM messages").first()
+    keyword = request.query_params.get("q", "").strip()[:120]
+    where = " WHERE instr(lower(nickname), lower(?)) > 0 OR instr(lower(content), lower(?)) > 0" if keyword else ""
+    args = (keyword, keyword) if keyword else ()
+    total_query = db.prepare("SELECT COUNT(*) AS n FROM messages" + where)
+    total_row = await (total_query.bind(*args) if args else total_query).first()
     total = int(total_row["n"]) if total_row else 0
     total_pages = max(1, (total + per - 1) // per)
     page = min(page, total_pages)
     res = await db.prepare(
-        "SELECT id, nickname, content, created_at, user_id FROM messages "
-        "ORDER BY id DESC LIMIT ? OFFSET ?"
-    ).bind(per, (page - 1) * per).all()
+        "SELECT id, nickname, content, created_at, user_id FROM messages" + where +
+        " ORDER BY id DESC LIMIT ? OFFSET ?"
+    ).bind(*args, per, (page - 1) * per).all()
     parsed = await _auth_optional(request)
     can_mod = False
     my_id = None
@@ -2565,11 +2579,19 @@ async def upload(body: UploadIn, request: Request):
     if ext not in ALLOWED_IMG:
         raise HTTPException(status_code=400, detail="只支持 jpg/png/gif/webp")
     try:
-        raw = base64.b64decode(body.data)
-    except Exception:
+        raw = base64.b64decode(body.data, validate=True)
+    except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="图片数据无效")
     if len(raw) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="图片不能超过 5MB")
+    signatures_match = {
+        "image/jpeg": raw.startswith(b"\xff\xd8\xff"),
+        "image/png": raw.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/gif": raw.startswith((b"GIF87a", b"GIF89a")),
+        "image/webp": raw.startswith(b"RIFF") and raw[8:12] == b"WEBP",
+    }
+    if not signatures_match[ALLOWED_IMG[ext]]:
+        raise HTTPException(status_code=400, detail="文件内容和图片格式不符")
     key = "img/" + _today_str().replace("-", "") + "/" + uuid.uuid4().hex[:12] + "." + ext
     from pyodide.ffi import to_js
     from js import Object
@@ -2586,8 +2608,7 @@ async def media(key: str, request: Request):
             '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180">'
             '<rect width="100%" height="100%" fill="#c0c0c0"/>'
             '<rect x="8" y="8" width="304" height="164" fill="none" stroke="#808080" stroke-width="2"/>'
-            '<text x="160" y="86" font-family="SimSun,serif" font-size="18" fill="#000" text-anchor="middle">图片已过期</text>'
-            '<text x="160" y="112" font-family="SimSun,serif" font-size="12" fill="#404040" text-anchor="middle">图床保存 14 天</text>'
+            '<text x="160" y="94" font-family="SimSun,serif" font-size="18" fill="#000" text-anchor="middle">图片不可用</text>'
             "</svg>"
         )
         return Response(content=placeholder, media_type="image/svg+xml")

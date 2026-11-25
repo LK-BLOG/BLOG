@@ -1037,3 +1037,13 @@ body.embedded .section { max-width: none; margin: 0; padding: 10px; }
     transition-duration: 1ms !important;
   }
 }
+.post-contents {
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  border: 1px solid currentColor;
+}
+.post-contents summary { cursor: pointer; font-weight: bold; }
+.post-contents ul { margin: 6px 0 0; padding-inline-start: 18px; }
+.post-contents li[data-level="H3"] { margin-inline-start: 16px; }
+.post-contents li[data-level="H4"] { margin-inline-start: 32px; }
+.post-heading { scroll-margin-top: 64px; }

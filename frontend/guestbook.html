@@ -39,11 +39,16 @@
               <div class="form-row">
                 <label for="content">内容</label>
                 <textarea class="field" id="content" maxlength="500" placeholder="想说的话…（必填，500 字以内）" required></textarea>
+                <small id="msg-length" class="muted">0 / 500</small>
               </div>
               <button type="submit" class="btn primary">提交留言</button>
             </form>
           </div>
         </div>
+        <form id="msg-search" class="mb8" role="search">
+          <input class="field" type="search" id="msg-keyword" maxlength="120" aria-label="搜索留言" placeholder="搜索昵称或留言正文…">
+          <button class="btn" type="submit">搜索</button>
+        </form>
         <div id="msg-list" class="win flat"><p class="muted px12">加载中…</p></div>
       </fieldset>
     </section>

@@ -153,7 +153,7 @@
 
   function mdToHtml(md) {
   var html = window.marked ? marked.parse(md || "") : (md || "");
-    return window.DOMPurify ? DOMPurify.sanitize(html) : html;
+    return window.DOMPurify ? DOMPurify.sanitize(html) : Blog.escapeHtml(md);
   }
 
   function setEditorMode(mode) {

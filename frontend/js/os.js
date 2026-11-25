@@ -71,6 +71,7 @@
           '<select class="os-theme-select" data-theme-select aria-label="主题">' +
             '<option value="normal">Normal</option>' +
             '<option value="os">OS</option>' +
+            '<option value="retro">千禧年</option>' +
           '</select>' +
           '<span id="os-clock"></span>' +
         '</div>' +

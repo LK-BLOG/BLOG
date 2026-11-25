@@ -23,5 +23,16 @@ export async function onRequest(context: { request: Request; params: { path?: st
 
   const resp = await fetch(target, init as RequestInit);
   const outHeaders = new Headers(resp.headers);
+  outHeaders.set("X-Content-Type-Options", "nosniff");
+  outHeaders.set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; sandbox");
+  if (
+    !["GET", "HEAD"].includes(context.request.method) ||
+    headers.has("Authorization") ||
+    headers.has("Cookie") ||
+    suffix === "me" ||
+    suffix.startsWith("auth/")
+  ) {
+    outHeaders.set("Cache-Control", "no-store");
+  }
   return new Response(resp.body, { status: resp.status, headers: outHeaders });
 }

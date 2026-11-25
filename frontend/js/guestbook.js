@@ -8,7 +8,29 @@
   var nickInput = document.getElementById("nickname");
   var contentInput = document.getElementById("content");
   var authHint = document.getElementById("msg-auth");
+  var searchForm = document.getElementById("msg-search");
+  var searchInput = document.getElementById("msg-keyword");
+  var length = document.getElementById("msg-length");
+  var draftKey = "xiaokan_guestbook_draft:" + (Blog.isAuthed() ? Blog.getUsername() : "guest");
+  var keyword = "";
   var msgPage = 1;
+  var requestId = 0;
+
+  function saveDraft() {
+    var content = contentInput.value;
+    length.textContent = content.length + " / " + contentInput.maxLength;
+    try {
+      if (content) localStorage.setItem(draftKey, content);
+      else localStorage.removeItem(draftKey);
+    } catch (err) { /* storage can be disabled */ }
+  }
+
+  function restoreDraft() {
+    try {
+      contentInput.value = (localStorage.getItem(draftKey) || "").slice(0, contentInput.maxLength);
+    } catch (err) { /* storage can be disabled */ }
+    length.textContent = contentInput.value.length + " / " + contentInput.maxLength;
+  }
 
   function showAlert(msg, type) {
     alertBox.innerHTML = '<div class="alert ' + (type || "error") + '">' + Blog.escapeHtml(msg) + "</div>";
@@ -31,11 +53,16 @@
 
   function loadMessages(page) {
     if (page) msgPage = page;
+    var request = ++requestId;
     listBox.innerHTML = '<p class="muted px12">加载中…</p>';
-    Blog.api("/api/messages?page=" + msgPage).then(function (data) {
+    var path = "/api/messages?page=" + msgPage + (keyword ? "&q=" + encodeURIComponent(keyword) : "");
+    Blog.api(path).then(function (data) {
+      if (request !== requestId) return;
+      msgPage = data.page || 1;
       var list = (data && data.messages) || [];
       if (!list.length) {
-        listBox.innerHTML = '<p class="muted px12">还没有留言，来说两句？</p>';
+        listBox.innerHTML = '<p class="muted px12">' +
+          (keyword ? "没有匹配的留言。" : "还没有留言，来说两句？") + "</p>";
         return;
       }
       var html = '<div class="win-title"><span class="win-label">' + Blog.icon("comment") + ' 留言条 ' + list.length + ' 条</span><span class="win-dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div><div class="win-body">';
@@ -92,6 +119,7 @@
         b.addEventListener("click", function () { loadMessages(parseInt(b.dataset.msgPage, 10)); });
       });
     }).catch(function (err) {
+      if (request !== requestId) return;
       listBox.innerHTML = '<div class="alert error">加载失败：' + esc(err.message) + "（检查 config.js 里的 API 地址）</div>";
     });
   }
@@ -117,8 +145,13 @@
       .then(function () {
         showAlert("留言成功", "ok");
         nickInput.value = "";
-        contentInput.value = "";
-        loadMessages();
+        if (contentInput.value.trim() === content) {
+          contentInput.value = "";
+          saveDraft();
+        }
+        keyword = "";
+        searchInput.value = "";
+        loadMessages(1);
       })
       .catch(function (err) {
         if (err.status === 401) {
@@ -131,6 +164,19 @@
       .finally(function () { btn.disabled = false; });
   });
 
+  searchForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    keyword = searchInput.value.trim();
+    loadMessages(1);
+  });
+  searchInput.addEventListener("input", function () {
+    if (!searchInput.value && keyword) {
+      keyword = "";
+      loadMessages(1);
+    }
+  });
+  contentInput.addEventListener("input", saveDraft);
+  restoreDraft();
   renderAuth();
   loadMessages();
 })();

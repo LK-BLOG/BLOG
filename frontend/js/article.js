@@ -213,6 +213,39 @@
     });
   }
 
+  function buildContents() {
+    var body = box.querySelector(".markdown-body");
+    var headings = Array.from(body.querySelectorAll("h2, h3, h4")).filter(function (heading) {
+      return heading.textContent.trim();
+    });
+    if (!headings.length) return;
+    var list = document.createElement("ul");
+    headings.forEach(function (heading, index) {
+      var id = "section-" + (index + 1);
+      while (document.getElementById(id)) id += "-heading";
+      heading.id = id;
+      heading.classList.add("post-heading");
+      var item = document.createElement("li");
+      item.dataset.level = heading.tagName;
+      var link = document.createElement("a");
+      link.href = "#" + id;
+      link.textContent = heading.textContent.trim();
+      item.appendChild(link);
+      list.appendChild(item);
+    });
+    if (headings.length > 1) {
+      var contents = document.createElement("details");
+      contents.className = "post-contents";
+      contents.open = true;
+      var title = document.createElement("summary");
+      title.textContent = "文章目录";
+      contents.append(title, list);
+      body.before(contents);
+    }
+    var target = headings.find(function (heading) { return "#" + heading.id === location.hash; });
+    if (target) target.scrollIntoView();
+  }
+
   function fallbackCopy(text) {
     var ta = document.createElement("textarea");
     ta.value = text;
@@ -295,11 +328,17 @@
           '<p class="post-meta">发布 ' + esc(Blog.fmtDate(a.created_at)) +
           (a.updated_at && a.updated_at !== a.created_at ? " | 更新 " + esc(Blog.fmtDate(a.updated_at)) : "") +
           " | " + (a.views || 0) + " 次浏览" +
-          (a.tags ? " | " + esc(a.tags).split(",").map(function (t) { return "#" + t.trim(); }).filter(Boolean).join(" ") : "") + "</p>" +
+          (a.tags ? " | " + a.tags.split(",").map(function (tag) {
+            return tag.trim();
+          }).filter(Boolean).map(function (tag) {
+            return '<a href="articles.html?tag=' + encodeURIComponent(tag) + '">#' + esc(tag) + "</a>";
+          }).join(" ") : "") + "</p>" +
           '<div class="markdown-body">' + renderMarkdown(a.content_md) + "</div>" +
         "</div>";
       commentsBox.classList.remove("hidden");
+      if (location.hash === "#comments") commentsBox.scrollIntoView();
       renderAuth();
+      buildContents();
       bindPopups();
       bindCodeCopy();
       loadComments();
