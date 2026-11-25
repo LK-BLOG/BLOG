@@ -95,6 +95,7 @@
 
   function searchForm(target, label) {
     var form = append(content, "form");
+    form.className = "retro-search";
     form.action = "retro.html";
     form.method = "get";
     var route = append(form, "input");
@@ -107,15 +108,22 @@
       tag.name = "tag";
       tag.value = params.tag;
     }
-    var caption = append(form, "label", label + "：");
+    var caption = append(form, "label", label);
     caption.htmlFor = "retro-search";
-    var field = append(form, "input");
+    var controls = append(form, "table");
+    controls.summary = "";
+    controls.className = "search-controls";
+    var row = controls.insertRow(-1);
+    var inputCell = row.insertCell(-1);
+    var buttonCell = row.insertCell(-1);
+    buttonCell.className = "search-action";
+    var field = append(inputCell, "input");
     field.type = "text";
     field.id = "retro-search";
     field.name = "q";
     field.maxLength = 120;
     field.value = keyword;
-    var submit = append(form, "input");
+    var submit = append(buttonCell, "input");
     submit.type = "submit";
     submit.value = "搜索";
   }
@@ -124,6 +132,7 @@
     var target = content;
     if (page === "home") {
       heading("首页");
+      searchForm("articles", "搜索文章");
       var portal = append(content, "table");
       portal.className = "portal";
       portal.summary = "";

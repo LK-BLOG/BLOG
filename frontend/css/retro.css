@@ -82,6 +82,17 @@ a:hover { color: #ffff66; }
 .content form { margin-bottom: 12px; padding: 8px; border: 1px inset #7575b2; background: #161748; }
 .content input { max-width: 95%; }
 .content textarea { max-width: 95%; }
+.content .retro-search { max-width: 42em; }
+.retro-search label { display: block; margin-bottom: 4px; }
+.search-controls { width: 100%; border-collapse: collapse; }
+.search-controls td { padding: 0; vertical-align: middle; }
+.search-controls .search-action { width: 1%; padding-left: 5px; white-space: nowrap; }
+.page .search-controls input {
+  box-sizing: border-box;
+  min-height: 30px;
+  margin: 0;
+}
+.page .search-controls input[type="text"] { width: 100%; max-width: none; }
 .portal { width: 100%; border-spacing: 6px; table-layout: fixed; }
 .portal td { vertical-align: top; }
 .portal-main { width: 63%; }
